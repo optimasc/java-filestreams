@@ -17,7 +17,15 @@ import com.optimasc.streams.internal.AbstractDocumentReader;
 import com.optimasc.streams.internal.ResourceChunkInfo;
 
 /**
- * Basic ZIP File reader parser.
+ * Basic ZIP File reader parser. In this parser, each chunk represents
+ * a filename and its associated compressed data, the
+ * <code>ID</code> of the chunk represents the filename in the zip file
+ * represented as a {@link java.lang.String}, and the data is the actual data stored
+ * for that file.
+ *
+ * <p>The standard resource attributes
+ * {@link com.optimasc.streams.internal.ResourceType} are available.
+ *
  * 
  * @author Carl Eric Codere
  * 
