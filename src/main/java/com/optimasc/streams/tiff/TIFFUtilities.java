@@ -246,7 +246,6 @@ public class TIFFUtilities
   public static final int TIFF_COMPRESSION_LZW = 5;
   public static final int TIFF_COMPRESSION_JPEG_OLD = 6;
   public static final int TIFF_COMPRESSION_JPEG_NEW = 7;
-  public static final int TIFF_COMPRESSION_DEFLATE_EXP = 32946;
   public static final int TIFF_COMPRESSION_DEFLATE = 8;
   public static final int TIFF_COMPRESSION_JBIG_T85 = 9;
   public static final int TIFF_COMPRESSION_JBIG_T43 = 10;
@@ -256,6 +255,7 @@ public class TIFFUtilities
   public static final int TIFF_COMPRESSION_RLE_LW = 32896;
   public static final int TIFF_COMPRESSION_RLE_HC = 32897;
   public static final int TIFF_COMPRESSION_RLE_BLW = 32898;
+  public static final int TIFF_COMPRESSION_DEFLATE_EXP = 32946;
   public static final int TIFF_COMPRESSION_KODAK_DCS = 32947;
   public static final int TIFF_COMPRESSION_JBIG = 34661;
   public static final int TIFF_COMPRESSION_JPEG2000 = 34712;

@@ -111,7 +111,7 @@ public class TIFFReader extends AbstractDocumentReader
     // If the size is less or equal than 4 then the value
     // is equal to the ValueOffset then it points directly to
     // the data value.
-    if (count <= LONGWORD_SIZE)
+    if (information.size <= LONGWORD_SIZE)
     {
       information.offset = reader.getPosition() - LONGWORD_SIZE;
     } else
