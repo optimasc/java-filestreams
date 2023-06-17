@@ -1,9 +1,7 @@
 package com.optimasc.streams;
 
-import java.util.Vector;
 
-
-/** Base implementation for writing structured file formats. Each structured
+/** Interface that allows creating structured data formats. Each structured
  *  format writer should implement this interface. 
  * 
  * @author Carl Eric Codere
@@ -11,12 +9,12 @@ import java.util.Vector;
  */
 public interface DocumentStreamWriter
 {
-  /** Starts a chunk element with the specified id and attributes
+  /** Starts a chunk/leaf element with the specified id and attributes
    *  which is active until {@link #writeEndElement()} is called.
    * 
    * @param id The ID of this chunk, the actual object
    *   type depends on the implementation.
-   * @param attributes An array of {@link #com.optimasc.utils.Attribute} containing
+   * @param attributes An array of {@link com.optimasc.utils.Attribute} containing
    *   the attributes for this element, this can be null if no attributes
    *   are supplied.
    * @throws DocumentStreamException
@@ -24,11 +22,12 @@ public interface DocumentStreamWriter
   public void writeStartElement(Object id, Attribute[] attributes) 
     throws DocumentStreamException;
 
-  /** 
+  /** Starts a group node that contains leaf elements with the specified
+   *  ID and attributes.
    * 
    * @param id The ID of this chunk, the actual object
    *   type depends on the implementation.
-   * @param attributes An array of {@link #com.optimasc.utils.Attribute} containing
+   * @param attributes An array of {@link com.optimasc.utils.Attribute} containing
    *   the attributes for this element, this can be null if no attributes
    *   are supplied.
    * @throws DocumentStreamException
@@ -36,27 +35,31 @@ public interface DocumentStreamWriter
   public void writeStartGroup(Object id, Attribute[] attributes) 
     throws DocumentStreamException;
   
-  /**
-   * Writes an end tag to the output relying on the internal 
-   * state of the writer to determine the prefix and local name
-   * of the event.
-   * @throws DocumentStreamException 
+  /** Closes the currently opened leaf chunk and updates any
+   * data as required. The leaf node to close should have
+   * been previously opened by {@link #writeStartElement(java.lang.Object, com.optimasc.streams.Attribute[]) }
+   *
+   * @throws DocumentStreamException if there is no leaf node started,
+   *   or if maximum allowed nesting has been reached, or if the size
+   *   of the data written to this element is not allowed.
    */
   public void writeEndElement() 
     throws DocumentStreamException;
-  
-  /**
-   * Writes an end tag to the output relying on the internal 
-   * state of the writer to determine the prefix and local name
-   * of the event.
-   * @throws DocumentStreamException 
+
+
+/** Closes the currently opened group chunk/node and updates any
+   * data as required. The group node to close should have
+   * been previously opened by {@link #writeStartGroup(java.lang.Object, com.optimasc.streams.Attribute[]) }
+   *
+   * @throws DocumentStreamException if there is no group node started,
+   *   or if maximum allowed nesting has been reached, or if the size
+   *   of the data written to this element is not allowed.
    */
   public void writeEndGroup() 
     throws DocumentStreamException;
   
 
-  /**
-   * Closes any start tags and writes corresponding end tags.
+  /** Writes end of document information.
    * @throws DocumentStreamException 
    */
   public void writeEndDocument() 
@@ -86,23 +89,45 @@ public interface DocumentStreamWriter
    * @param version version of the xml document
    * @throws DocumentStreamException 
    */
+
+  /** Creates a new document with the specified <code>publicID</code>. This
+   *  is normally the first method to call when creating a structured document.
+   *
+   *  <p>The usage and format of <code>publicID</code> is implementation
+   *  specific and may be unused in some implementations.
+   *
+   * @param publicID The ID associated with this document
+   * @throws DocumentStreamException
+   */
   public void  writeStartDocument(String publicID)
     throws DocumentStreamException;
 
-  /**
-   * Write text to the output
+  /** Write text to the output. The underlying encoding of the
+   *  data is implementation specific and may throw {@link java.io.UnsupportedEncodingException}
+   *  if the data can be stored in the underlying structured format. Normally
+   *  <code>US-ASCII</code> should be supported by default, but other characters
+   *  depends on the underlying structured format.
+   * 
    * @param text the value to write
-   * @throws DocumentStreamException 
+   * @throws DocumentStreamException
+   * @throws UnsupportedEncodingException In the case where the underlying
+   *  implementation does not permit to encode these characters.
    */
   public void writeCharacters(String text) 
     throws DocumentStreamException;
 
-  /**
-   * Write text to the output
+  /** Write text to the output. The underlying encoding of the
+   *  data is implementation specific and may throw {@link java.io.UnsupportedEncodingException}
+   *  if the data can be stored in the underlying structured format. Normally
+   *  <code>US-ASCII</code> should be supported by default, but other characters
+   *  depends on the underlying structured format.
+   *
    * @param text the value to write
    * @param start the starting position in the array
    * @param len the number of characters to write
-   * @throws DocumentStreamException 
+   * @throws DocumentStreamException
+   * @throws UnsupportedEncodingException In the case where the underlying
+   *  implementation does not permit to encode these characters.
    */
   public void writeCharacters(char[] text, int start, int len) 
     throws DocumentStreamException;

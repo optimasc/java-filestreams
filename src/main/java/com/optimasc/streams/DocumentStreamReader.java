@@ -3,7 +3,7 @@ package com.optimasc.streams;
 
 
 /**
- *  The DocumentStreamReader interface allows forward, read-only access to structured
+ *  Interface that allows forward, read-only access to structured
  *  file formats. It is designed to be the lowest level and most efficient way to
  *  read structured document data.
  *
@@ -36,8 +36,8 @@ package com.optimasc.streams;
  *     </tr>
  *     <tr>
  *       <td> All States  </td>
- *       <td> getProperty(), hasNext(), close(),
- *            getEventType(),getLocation(), setErrorHandler(), getDocumentInfo()
+ *       <td> close(), getDocumentInfo(), getEventType(), getLocation(), getProperty(), hasNext(),
+ *            setErrorHandler(), getDocumentInfo()
  *       </td>
  *     </tr>
  *     <tr>
@@ -76,7 +76,9 @@ package com.optimasc.streams;
 public interface DocumentStreamReader
 {
   /**
-   * Get the value of a feature/property from the underlying implementation
+   * Get the value of a feature/property from the underlying implementation. Features
+   * or property are configuration elements specific to implementations.
+   * 
    * @param name The name of the property, may not be null
    * @return The value of the property
    * @throws IllegalArgumentException if name is null

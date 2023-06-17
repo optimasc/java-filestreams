@@ -55,11 +55,11 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 
 /**
- * Implements a @see(java.io.FileInputStream) which supports the mark and reset
+ * Implements a {@link java.io.FileInputStream} which supports the mark and reset
  * methods which permits some kind of seeking in File Input streams. The class
- * uses @see(java.io.RandomAccessFile) to access the actual file.
+ * uses {@link java.io.RandomAccessFile} to access the actual file.
  * 
- * @author carl eric codere
+ * @author Carl Eric Codere
  */
 public class FileMarkableInputStream extends InputStream
 {
