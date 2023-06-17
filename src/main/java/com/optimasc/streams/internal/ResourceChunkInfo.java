@@ -2,7 +2,6 @@ package com.optimasc.streams.internal;
 
 import java.util.Calendar;
 import java.util.Date;
-import java.util.Vector;
 
 import com.optimasc.date.BaseISO8601Date;
 import com.optimasc.streams.Attribute;
@@ -17,7 +16,7 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
   String  digestType;
   String  compression;
   String  encryptionType;
-  int    encryptionKeyLength;
+  int     encryptionKeyLength;
   
   protected long    realSize;
   String  comment;

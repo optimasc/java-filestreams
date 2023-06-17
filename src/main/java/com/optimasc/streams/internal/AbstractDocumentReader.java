@@ -58,9 +58,10 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
   /**
    * Creates this instance of a linear parser that accepts nesting levels up to
    * the specified level.
-   * 
-   * @param maxNesting
-   *          Maximum nesting level for this file format.
+   *
+   * @param maxNesting Maximum nesting level allowed for this structured format.
+   * @param inputStream The inputstream to read from
+   * @param filter
    * @throws DocumentStreamException
    */
   public AbstractDocumentReader(int maxNesting, InputStream inputStream, StreamFilter filter)
