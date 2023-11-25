@@ -3,13 +3,12 @@ package com.optimasc.streams.zip;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 
-import org.apache.commons.vfs2.RandomAccessContent;
-
+import com.optimasc.io.FileDataOutputStream;
 import com.optimasc.stream.TestUtilities;
 import com.optimasc.streams.DefaultStreamFilter;
 import com.optimasc.streams.DocumentStreamException;
-import com.optimasc.streams.FileSeekableOutputStream;
 import com.optimasc.zip.ZIPReaderImpl;
 import com.optimasc.zip.ZIPWriterImpl;
 
@@ -33,13 +32,14 @@ public class ZIPWriterTest extends TestCase
     try {
         int v;
         InputStream reader = getClass().getResourceAsStream("/res/sample.vcf");
-        RandomAccessContent stream = new FileSeekableOutputStream("sample.zip");
-        ZIPWriterImpl writer = new ZIPWriterImpl(stream);
+        OutputStream stream = new FileDataOutputStream("sample.zip");
+        ZIPWriterImpl writer = new ZIPWriterImpl();
+        writer.setOutput(stream, null);
         writer.writeStartDocument("");
         writer.writeStartElement("sample.vcf", null);
         while ((v = reader.read()) != -1)
         {
-          writer.writeOctet(v);
+          writer.writeByte(v);
         }
         writer.writeEndElement();
         writer.writeEndDocument();
@@ -49,12 +49,9 @@ public class ZIPWriterTest extends TestCase
     {
       fail();
         
-    } catch (DocumentStreamException e) 
-    {
-        fail();
     } catch (IOException e) 
     {
-      fail();
+        fail();
     }
   }
 }

@@ -1,34 +1,36 @@
 package com.optimasc.streams.internal;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.util.Stack;
 import java.util.Vector;
 
-import org.apache.commons.vfs2.RandomAccessContent;
-
+import com.optimasc.io.AbstractDataOutputStream;
+import com.optimasc.io.ByteOrder;
+import com.optimasc.io.SeekableDataOutputStream;
+import com.optimasc.io.SeekableDataStream;
 import com.optimasc.streams.Attribute;
 import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.DocumentStreamWriter;
 import com.optimasc.streams.ErrorHandler;
 
-public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
-    ErrorHandler
+public abstract class AbstractDocumentWriter implements DocumentStreamWriter
 {
-
   protected ChunkInfo currentChunk;
   protected Stack groups;
   protected ChunkInfo currentGroup;
-  protected DataWriter dataWriter;
   protected boolean bigEndian;
   protected int maxNesting;
+  protected SeekableDataOutputStream dataWriter;
   protected ChunkUtilities validator;
   protected byte[] w = new byte[8];
 
-  public AbstractDocumentWriter(RandomAccessContent outputStream,
-      boolean bigEndian, int maxNesting) throws DocumentStreamException
+  public AbstractDocumentWriter(boolean bigEndian, int maxNesting)
   {
-    this.dataWriter = new DataWriter(outputStream, this);
     this.maxNesting = maxNesting;
     this.groups = new Stack();
+    this.bigEndian = bigEndian;
     this.currentChunk = newChunkInfo();
   }
   
@@ -53,7 +55,7 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
    *          The chunk information that contains valid data
    */
   protected abstract void writeChunkHeader(ChunkInfo chunkData)
-      throws DocumentStreamException;
+      throws IOException;
 
   /**
    * This routine should write the chunk header with the correct values. The
@@ -67,7 +69,7 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
    *          The chunk information that contains valid data
    */
   protected abstract void writeFixupChunkHeader(ChunkInfo chunkData)
-      throws DocumentStreamException;
+      throws IOException;
 
   /**
    * This routine should write any footer after the data of this
@@ -80,64 +82,37 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
    *          The chunk information that contains valid data
    */
   protected abstract void writeChunkFooter(ChunkInfo chunkData)
-      throws DocumentStreamException;
+      throws IOException;
 
   public abstract void writeStartDocument(String publicID)
-      throws DocumentStreamException;
+      throws IOException;
 
-  public void writeEndDocument() throws DocumentStreamException
+  public void writeEndDocument() throws IOException
   {
     ChunkInfo groupInfo;
     // Verify if the current chunk has been closed.
     if (currentChunk.type != ChunkInfo.UNDEFINED_VALUE)
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_NOT_CLOSED,
-          currentChunk.id.toString());
+      throw new IllegalStateException(
+          DocumentStreamException.ERR_BLOCK_NOT_CLOSED+
+          " '"+currentChunk.id.toString()+"'");
     // Verify if all groups have been closed
     while (groups.isEmpty() == false)
     {
       groupInfo = (ChunkInfo) groups.pop();
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_NOT_CLOSED, groupInfo.id.toString());
+      throw new IllegalStateException(
+          DocumentStreamException.ERR_BLOCK_NOT_CLOSED+" '"+groupInfo.id.toString()+"'");
     }
   }
 
-  // Default implementation writes the data as ISO-8859-1 characters
-  public void writeCharacters(char[] text, int start, int len)
-      throws DocumentStreamException
-  {
-    int i;
-    byte[] outArray = new byte[len];
-    // Convert to ISO-8859-1 character sets
-    for (i = 0; i < len; i++)
-    {
-      if ((int)text[start+i] > (int)0xff)
-      {
-        outArray[i] = (byte) '?';
-      } else
-      {
-        outArray[i] = (byte) text[start+i];
-      }
-    }
-    writeOctetString(outArray, 0, len);
-  }
 
-  public void writeStartElement(Object id, Attribute[] attributes) throws DocumentStreamException
+  public void writeStartElement(Object id, Attribute[] attributes) throws IOException
   {
     // Check if we currently have a valid chunk - it should not be possible
     // to have a valid chunk currently because nesting of chunks is not allowed.
     if (currentChunk.type != ChunkInfo.UNDEFINED_VALUE)
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_INVALID_NESTING, id.toString());
+      throw new IllegalStateException(DocumentStreamException.ERR_INVALID_NESTING+id.toString());
     // Verify the validity of the identifier
-    try
-    {
-      validator.chunkIDToObject(id);
-    } catch (IllegalArgumentException e)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_ID, id.toString());
-    }
+    validator.chunkIDToObject(id);
     currentChunk.reset();
     currentChunk.id = id;
     currentChunk.setAttributes(attributes);
@@ -145,23 +120,15 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
     writeChunkHeader(currentChunk);
   }
 
-  public void writeStartGroup(Object id, Attribute[] attributes) throws DocumentStreamException
+  public void writeStartGroup(Object id, Attribute[] attributes) throws IOException
   {
     // Check if we are allowed to nest further
     if (groups.size() >= maxNesting)
     {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_INVALID_NESTING, id.toString());
+      throw new IllegalStateException(DocumentStreamException.ERR_INVALID_NESTING+id.toString());
     }
     // Verify the validity of the identifier
-    try
-    {
-      validator.groupIDToObject(id);
-    } catch (IllegalArgumentException e)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_ID, id.toString());
-    }
+    validator.groupIDToObject(id);
     currentGroup = new ChunkInfo();
     currentGroup.reset();
     currentGroup.id = id;
@@ -171,19 +138,13 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
     writeChunkHeader(currentGroup);
   }
 
-  public void writeEndElement() throws DocumentStreamException
+  public void writeEndElement() throws IOException
   {
     // Check if we currently have a valid chunk - if not then we have a problem.
     if (currentChunk.type == ChunkInfo.UNDEFINED_VALUE)
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_INVALID_NESTING);
+      throw new IllegalStateException(DocumentStreamException.ERR_INVALID_NESTING);
     // Verify the validity of the size
-    if (validator.isValidChunkSize(currentChunk.size) == false)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_SIZE,
-          currentChunk.id.toString());
-    }
+    validator.validateChunkSize(currentChunk.size);
     writeFixupChunkHeader(currentChunk);
     writeChunkFooter(currentChunk);
     // writeChunkHeader();
@@ -193,23 +154,18 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
     currentChunk.type = ChunkInfo.UNDEFINED_VALUE;
   }
 
-  public void writeEndGroup() throws DocumentStreamException
+  public void writeEndGroup() throws IOException
   {
     if (groups.isEmpty() == true)
     {
-      throw new DocumentStreamException(
+      throw new IllegalStateException(
           DocumentStreamException.ERR_INVALID_NESTING);
     }
     currentGroup = (ChunkInfo) groups.pop();
     writeFixupChunkHeader(currentGroup);
     writeChunkFooter(currentGroup);
     // Verify the validity of the size, must be done after it is done by the specific implementation part.
-    if (validator.isValidGroupSize(currentGroup.size) == false)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_SIZE,
-          currentGroup.id.toString());
-    }
+    validator.validateGroupSize(currentGroup.size);
     // Now the current Group is the one on the top of the stack
     if (groups.isEmpty() == false)
       currentGroup = (ChunkInfo) groups.peek();
@@ -217,14 +173,9 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
       currentGroup = null;
   }
 
-  public void close() throws DocumentStreamException
+  public void close() throws IOException
   {
-    dataWriter.flush();
-  }
-
-  public void flush() throws DocumentStreamException
-  {
-    dataWriter.flush();
+    dataWriter.close();
   }
 
   public Object getProperty(String name) throws IllegalArgumentException
@@ -232,51 +183,49 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
     return null;
   }
 
-  public void writeCharacters(String text) throws DocumentStreamException
+  public void writeChars(String text) throws IOException
   {
-    char[] chars = text.toCharArray();
-    writeCharacters(chars, 0, chars.length);
+    dataWriter.writeChars(text);
   }
 
-  public void writeOctet(int b) throws DocumentStreamException
+  public void writeByte(int b) throws IOException
   {
-    w[0] = (byte) (b & 0xFF);
-    writeOctetString(w,0,1);
+    dataWriter.write(b);
   }
 
   /** This should be overriden when calculating the checksum is required.
    *  This is used by all write methods in this class.
    */  
-  public void writeOctetString(byte[] buffer, int off, int len)
-      throws DocumentStreamException
+  public void write(byte[] buffer, int off, int len)
+      throws IOException
   {
     // We are only allowed to write data values when in chunk data  
     if (currentChunk.type != ChunkInfo.TYPE_CHUNK)
     {
-      throw new DocumentStreamException(
+      throw new IllegalStateException(
           DocumentStreamException.ERR_INVALID_STATE);
     }
     dataWriter.write(buffer, off, len);
     currentChunk.size = currentChunk.size + len;
   }
 
-  public void writeWord(short value) throws DocumentStreamException
+  public void writeShort(int value) throws IOException
   {
     if (bigEndian)
     {
       w[1] = (byte)(value & 0xFF);
       w[0] = (byte)((value  >>> 8) & 0xFF);
-      writeOctetString(w, 0, 2);
+      dataWriter.write(w, 0, 2);
     }
     else
     {
       w[0] = (byte)(value & 0xFF);
       w[1] = (byte)((value  >>> 8) & 0xFF);
-      writeOctetString(w, 0, 2);
+      dataWriter.write(w, 0, 2);
     }
   }
 
-  public void writeLongword(int value) throws DocumentStreamException
+  public void writeInt(int value) throws IOException
   {
     if (bigEndian)
     {
@@ -284,7 +233,7 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
       w[1] = (byte)(0xff & (value >> 16));
       w[2] = (byte)(0xff & (value >> 8));
       w[3] = (byte)(0xff & value);
-      writeOctetString(w, 0, 4);
+      dataWriter.write(w, 0, 4);
     }
     else
     {
@@ -292,24 +241,24 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
       w[2] = (byte)(0xff & (value >> 16));
       w[1] = (byte)(0xff & (value >> 8));
       w[0] = (byte)(0xff & value);
-      writeOctetString(w, 0, 4);
+      dataWriter.write(w, 0, 4);
     }
   }
 
-  public void writeSingle(float v) throws DocumentStreamException
+  public void writeFloat(float v) throws IOException
   {
     int j = Float.floatToIntBits(v);
     if (bigEndian)
     {
-      writeLongword(j);
+      writeInt(j);
     }
     else
     {
-      writeLongword(j);
+      writeInt(j);
     }
   }
 
-  public void writeDouble(double v) throws DocumentStreamException
+  public void writeDouble(double v) throws IOException
   {
     long value = Double.doubleToLongBits(v);
     if (bigEndian)
@@ -322,7 +271,7 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
       w[5] = (byte)(0xff & (value >> 16));
       w[6] = (byte)(0xff & (value >> 8));
       w[7] = (byte)(0xff & value);
-      writeOctetString(w,0,8);
+      dataWriter.write(w,0,8);
     }
     else
     {
@@ -334,8 +283,113 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter,
       w[2] = (byte)(0xff & (value >> 16));
       w[1] = (byte)(0xff & (value >> 8));
       w[0] = (byte)(0xff & value);
-      writeOctetString(w,0,8);
+      dataWriter.write(w,0,8);
     }
   }
+
+  @Override
+  public void write(int b) throws IOException
+  {
+    dataWriter.write(b);
+  }
+
+  @Override
+  public void write(byte[] buffer) throws IOException
+  {
+    dataWriter.write(buffer);
+  }
+
+  @Override
+  public void writeLong(long value) throws IOException
+  {
+    if (bigEndian)
+    {
+      w[0]   = (byte)(0xff & (value >> 56));
+      w[1] = (byte)(0xff & (value >> 48));
+      w[2] = (byte)(0xff & (value >> 40));
+      w[3] = (byte)(0xff & (value >> 32));
+      w[4] = (byte)(0xff & (value >> 24));
+      w[5] = (byte)(0xff & (value >> 16));
+      w[6] = (byte)(0xff & (value >> 8));
+      w[7] = (byte)(0xff & value);
+      dataWriter.write(w,0,8);
+    }
+    else
+    {
+      w[7]   = (byte)(0xff & (value >> 56));
+      w[6] = (byte)(0xff & (value >> 48));
+      w[5] = (byte)(0xff & (value >> 40));
+      w[4] = (byte)(0xff & (value >> 32));
+      w[3] = (byte)(0xff & (value >> 24));
+      w[2] = (byte)(0xff & (value >> 16));
+      w[1] = (byte)(0xff & (value >> 8));
+      w[0] = (byte)(0xff & value);
+      dataWriter.write(w,0,8);
+    }
+  }
+
+  @Override
+  public void writeBoolean(boolean v) throws IOException
+  {
+    if (v==true)
+    {
+      dataWriter.write(1);  
+    } else
+    {
+      dataWriter.write(0);
+    }
+  }
+
+  @Override
+  public void writeChar(int v) throws IOException
+  {
+  }
+
+  /** Overriden default implementation that supports writing
+   *  ISO-8859-1 characters as raw array of octets. 
+   * 
+   */
+  public void writeBytes(String s) throws IOException
+  {
+    int i;
+    int c;
+    for (i = 0; i < s.length(); i++)
+    {
+      c = s.charAt(i);
+      if (c > 0xFF)
+      {
+        throw new UnsupportedEncodingException("Character at position "+Integer.toString(i)+" is over the value 255.");
+      }
+      dataWriter.write(c);
+    }
+  }
+
+  public void writeUTF(String s) throws IOException
+  {
+  }
+
+  public void setOutput(OutputStream os, String encoding) throws IOException
+  {
+    if ((os instanceof SeekableDataOutputStream)==false)
+    {
+      throw new IllegalArgumentException("'os' should be of instance of "+SeekableDataOutputStream.class.getName());
+    }
+    dataWriter = (SeekableDataOutputStream)os;
+    if (bigEndian)
+    {
+      dataWriter.setByteOrder(ByteOrder.BIG_ENDIAN);
+    }  else
+    {
+      dataWriter.setByteOrder(ByteOrder.LITTLE_ENDIAN);
+    }
+  }
+
+  public void flush() throws IOException
+  {
+    dataWriter.flush();
+  }
+  
+  
+
 
 }

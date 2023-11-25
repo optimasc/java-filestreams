@@ -72,18 +72,16 @@ public class RIFFUtilities extends ChunkUtilities
     return id.toString();
   }
 
-  public boolean isValidChunkSize(long size)
+  public void validateChunkSize(long size) throws IllegalArgumentException
   {
     if ((size < 0) || (size > ((long)Integer.MAX_VALUE*2)))
-      return false;
-    return true;
+      throw new IllegalArgumentException("Size must be between 0 and "+Long.toString((long)Integer.MAX_VALUE*2));
   }
 
-  public boolean isValidGroupSize(long size)
+  public void validateGroupSize(long size)
   {
     if ((size < 0) || (size > ((long)Integer.MAX_VALUE*2)))
-      return false;
-    return true;
+      throw new IllegalArgumentException("Size must be between 0 and "+Long.toString((long)Integer.MAX_VALUE*2));
   }
   
   

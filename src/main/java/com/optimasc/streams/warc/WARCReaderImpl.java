@@ -1,27 +1,24 @@
 package com.optimasc.streams.warc;
 
-import java.io.InputStream;
+import java.io.EOFException;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.Vector;
 
+import com.optimasc.io.SeekableDataInputStream;
+import com.optimasc.streams.Attribute;
 import com.optimasc.streams.DocumentInfo;
 import com.optimasc.streams.DocumentStreamException;
-import com.optimasc.streams.StreamFilter;
-import com.optimasc.streams.internal.ChunkInfo;
-import com.optimasc.streams.internal.DataReader;
 import com.optimasc.streams.internal.AbstractDocumentReader;
-import com.optimasc.streams.riff.RIFFUtilities;
-import com.optimasc.utils.Property;
-//import com.optimasc.utils.PropertyArray;
+import com.optimasc.streams.internal.ChunkInfo;
 
 public class WARCReaderImpl extends AbstractDocumentReader
 {
 
   public byte[] byteBuffer = new byte[WARCUtilities.MAGIC_WARC.length()];
   
-  public WARCReaderImpl(InputStream inputStream, StreamFilter filter) throws DocumentStreamException
+  public WARCReaderImpl()
   {
-    super(64, inputStream, filter);
+    super(64);
   }
   
   
@@ -32,17 +29,17 @@ public class WARCReaderImpl extends AbstractDocumentReader
    * @return
    * @throws DocumentStreamException
    */
-  protected Property readNextField(DataReader dataReader) throws DocumentStreamException
+  protected Attribute readNextField(SeekableDataInputStream dataReader) throws DocumentStreamException, IOException
   {
     StringBuffer buffer = new StringBuffer();
-    Property prop;
+    Attribute prop;
     String s1;
     int separatorIndex = -1;
-    int c= dataReader.read8Raw();
+    int c= dataReader.readUnsignedByte();
     // Check if this is the end of the record structure.
     if (c == WARCUtilities.CR)
     {
-      c = dataReader.read8Raw();
+      c = dataReader.readUnsignedByte();
       if (c != WARCUtilities.LF)
         errorHandler.fatalError(new DocumentStreamException(DocumentStreamException.ERR_BLOCK_INVALID_HEADER));
       return null;
@@ -55,9 +52,9 @@ public class WARCReaderImpl extends AbstractDocumentReader
       if ((c == ':') && (separatorIndex == -1))
         separatorIndex = buffer.length();
       buffer.append((char)c);
-      c = dataReader.read8Raw();
+      c = dataReader.readUnsignedByte();
     }
-    c = dataReader.read8Raw();
+    c = dataReader.readUnsignedByte();
     if (c == -1) 
       errorHandler.fatalError(new DocumentStreamException(DocumentStreamException.ERR_BLOCK_INVALID_HEADER));
     if (c != WARCUtilities.LF)
@@ -66,22 +63,22 @@ public class WARCReaderImpl extends AbstractDocumentReader
     if (separatorIndex == -1)
       errorHandler.fatalError(new DocumentStreamException(DocumentStreamException.ERR_BLOCK_INVALID_HEADER));
     s1 = buffer.toString();
-    prop = new Property(s1.substring(0,separatorIndex).trim(),s1.substring(separatorIndex+1,s1.length()).trim());
+    prop = new Attribute(null,s1.substring(0,separatorIndex).trim(),s1.substring(separatorIndex+1,s1.length()).trim());
     return prop;
   }
   
-  protected String readNextToken(DataReader dataReader) throws DocumentStreamException
+  protected String readNextToken(SeekableDataInputStream dataReader) throws DocumentStreamException, IOException
   {
-    int c= dataReader.read8Raw();
+    int c= dataReader.readUnsignedByte();
     StringBuffer buffer = new StringBuffer();
     while (WARCUtilities.isWhiteSpace((char)c))
     {
-      c = dataReader.read8Raw();
+      c = dataReader.readUnsignedByte();
       // End of block
       if (c == WARCUtilities.CR)
       {
         // Go back to CR character
-        dataReader.setPosition(dataReader.getPosition()-1);
+        dataReader.seek(dataReader.getStreamPosition()-1);
         return null;
       }
       if (c == -1) 
@@ -89,12 +86,12 @@ public class WARCReaderImpl extends AbstractDocumentReader
     }
     while (WARCUtilities.isWhiteSpace((char)c)==false)
     {
-      c = dataReader.read8Raw();
+      c = dataReader.readUnsignedByte();
       // End of block
       if (c == WARCUtilities.CR)
       {
         // Go back to CR character
-        dataReader.setPosition(dataReader.getPosition()-1);
+        dataReader.seek(dataReader.getStreamPosition()-1);
         return null;
       }
       if (c == -1) 
@@ -105,16 +102,16 @@ public class WARCReaderImpl extends AbstractDocumentReader
   }
   
   
-  protected void skipToEndOfRecord(DataReader dataReader) throws DocumentStreamException
+  protected void skipToEndOfRecord(SeekableDataInputStream dataReader) throws DocumentStreamException, IOException
   {
-    int c= dataReader.read8Raw();
+    int c= dataReader.readUnsignedByte();
     while (c != WARCUtilities.CR)
     {
-      c = dataReader.read8Raw();
+      c = dataReader.readUnsignedByte();
       if (c == -1) 
         errorHandler.fatalError(new DocumentStreamException(DocumentStreamException.ERR_BLOCK_INVALID_HEADER));
     }
-    c = dataReader.read8Raw();
+    c = dataReader.readUnsignedByte();
     if (c == -1) 
       errorHandler.fatalError(new DocumentStreamException(DocumentStreamException.ERR_BLOCK_INVALID_HEADER));
     if (c != WARCUtilities.LF)
@@ -122,8 +119,8 @@ public class WARCReaderImpl extends AbstractDocumentReader
   }
 
   
-  protected void readChunkHeader(DataReader dataReader, ChunkInfo header)
-      throws DocumentStreamException
+  protected void readChunkHeader(SeekableDataInputStream dataReader, ChunkInfo header)
+      throws DocumentStreamException, IOException
   {
     header.reset();
 /*	  
@@ -185,20 +182,20 @@ public class WARCReaderImpl extends AbstractDocumentReader
       errorHandler.warning(new DocumentStreamException(DocumentStreamException.ERR_BLOCK_INVALID_HEADER,WARCUtilities.FIELD_RECORD_DATE_UPPER));
     }
     header.type = ChunkInfo.TYPE_CHUNK;
-    header.offset = reader.getPosition();
+    header.offset = reader.getStreamPosition();
     // There are two CRLF CRLF after the block data
     header.extraSize = 4;
 */ 
   }
 
-  protected DocumentInfo readDocumentHeader(DataReader dataReader)
+  protected DocumentInfo readDocumentHeader(SeekableDataInputStream dataReader) throws IOException
   {
     int type;
     try
     {
-    long position = dataReader.getPosition();
+    long position = dataReader.getStreamPosition();
     // Read the chunk identifier
-    dataReader.read(byteBuffer, 0, WARCUtilities.MAGIC_WARC.length());
+    dataReader.readFully(byteBuffer, 0, WARCUtilities.MAGIC_WARC.length());
     String chunkID = null;
     try
     {
@@ -213,18 +210,15 @@ public class WARCReaderImpl extends AbstractDocumentReader
       type = DocumentInfo.TYPE_CHARACTER;
     } else 
       return null;
-    dataReader.setPosition(position);
+    dataReader.seek(position);
     
-    DocumentInfo document = new DocumentInfo(chunkID,"application/warc",type,dataReader.getSize());
+    DocumentInfo document = new DocumentInfo(chunkID,"application/warc",type,dataReader.length());
     return document;
     
-  } catch (DocumentStreamException e)
-  {
-    return null;
-  }
-    
-
-
+  } catch (EOFException e)
+    {
+      return null;
+    }
   }
 
 }

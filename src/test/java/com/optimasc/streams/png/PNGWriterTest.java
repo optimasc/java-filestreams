@@ -5,13 +5,13 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 
+import com.optimasc.io.FileDataOutputStream;
 import com.optimasc.stream.TestUtilities;
 import com.optimasc.streams.DefaultStreamFilter;
 import com.optimasc.streams.DocumentInfo;
 import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.DocumentStreamReader;
 import com.optimasc.streams.DocumentStreamWriter;
-import com.optimasc.streams.FileSeekableOutputStream;
 import com.optimasc.streams.riff.RIFFReader;
 import com.optimasc.streams.riff.RIFFWriter;
 
@@ -35,10 +35,12 @@ public class PNGWriterTest extends TestCase
       DocumentStreamReader reader;
       
     try {
-        reader = new PNGReader(getClass()
-                  .getResourceAsStream("/res/rembrant.png"),new DefaultStreamFilter());
-        FileSeekableOutputStream stream = new FileSeekableOutputStream("rembrant.png","rw");
-        DocumentStreamWriter writer = new PNGWriter(stream);
+        InputStream is = this.getClass().getResourceAsStream("/res/rembrant.png");
+        reader = new PNGReader();
+        reader.setInput(is, null);
+        FileDataOutputStream stream = new FileDataOutputStream("rembrant.png");
+        DocumentStreamWriter writer = new PNGWriter();
+        writer.setOutput(stream, null);
         TestUtilities.copy(reader, writer);
         stream.close();
         

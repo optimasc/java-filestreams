@@ -1,16 +1,16 @@
 package com.optimasc.streams.vformat;
 
-import java.io.InputStream;
+import java.io.EOFException;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.Vector;
 
+import com.optimasc.io.SeekableDataInputStream;
+import com.optimasc.streams.Attribute;
 import com.optimasc.streams.DocumentInfo;
 import com.optimasc.streams.DocumentStreamException;
-import com.optimasc.streams.StreamFilter;
-import com.optimasc.streams.internal.ChunkInfo;
-import com.optimasc.streams.internal.DataReader;
 import com.optimasc.streams.internal.AbstractDocumentReader;
-import com.optimasc.streams.Attribute;
+import com.optimasc.streams.internal.ChunkInfo;
 
 ;
 
@@ -37,10 +37,9 @@ public class VFormatReader extends AbstractDocumentReader
   protected int lineNumber;
   protected int columnNumber;
 
-  public VFormatReader(InputStream inputStream, StreamFilter filter)
-      throws DocumentStreamException
+  public VFormatReader()
   {
-    super(1, inputStream, filter);
+    super(1);
     validator = new VFormatUtilities();
   }
 
@@ -56,8 +55,8 @@ public class VFormatReader extends AbstractDocumentReader
    *          should be filled in.
    */
 
-  protected void readChunkHeader(DataReader dataReader, ChunkInfo header)
-      throws DocumentStreamException
+  protected void readChunkHeader(SeekableDataInputStream dataReader, ChunkInfo header)
+      throws DocumentStreamException, IOException
   {
     String s;
     header.reset();
@@ -106,16 +105,17 @@ public class VFormatReader extends AbstractDocumentReader
     }
   }
 
-  protected DocumentInfo readDocumentHeader(DataReader dataReader)
+  protected DocumentInfo readDocumentHeader(SeekableDataInputStream reader) throws
+   DocumentStreamException, IOException
   {
     String s;
     String groupID;
     try
     {
-
+      long oldpos = reader.getStreamPosition();
       do
       {
-        s = readLine(dataReader);
+        s = readLine(reader);
       } while (s.length() == 0);
 
       String values[] = parseLine(s);
@@ -133,16 +133,18 @@ public class VFormatReader extends AbstractDocumentReader
         return null;
       }
       // Reset the stream
-      dataReader.setPosition(0);
+      reader.seek(oldpos);
       DocumentInfo document = new DocumentInfo(values[INDEX_VALUE],
-          "text/directory", DocumentInfo.TYPE_CHARACTER, dataReader.getSize());
+          "text/directory", DocumentInfo.TYPE_CHARACTER, reader.length());
       return document;
 
     } catch (DocumentStreamException e)
     {
       return null;
+    } catch (EOFException e)
+    {
+      return null;
     }
-
   }
 
   /**
@@ -160,9 +162,13 @@ public class VFormatReader extends AbstractDocumentReader
     return false;
   }
 
-  protected int readByte(DataReader reader) throws DocumentStreamException
+  /** This method should not throw an exception when EOF is reached but should
+   *  simply return -1.
+   * 
+   */
+  private int readByte(SeekableDataInputStream reader) throws DocumentStreamException, IOException
   {
-    int v = reader.read8Raw();
+    int v = reader.read();
     columnNumber++;
     return v;
   }
@@ -175,7 +181,7 @@ public class VFormatReader extends AbstractDocumentReader
    * @return The string read.
    * @throws DocumentStreamException
    */
-  protected String readLine(DataReader reader) throws DocumentStreamException
+  protected String readLine(SeekableDataInputStream reader) throws DocumentStreamException, IOException
   {
     lineNumber = 0;
     columnNumber = 0;
@@ -196,24 +202,24 @@ public class VFormatReader extends AbstractDocumentReader
         lineNumber++;
         columnNumber = 0;
 
-        pos = reader.getPosition();
+        pos = reader.getStreamPosition();
         ch = readByte(reader);
         // We exit the loop we have finished reading, CR+LF mode (Windows,DOS) 
         if (ch == VFormatUtilities.CHAR_LF)
         {
-          pos = reader.getPosition();
+          pos = reader.getStreamPosition();
           ch = readByte(reader);
           // If the next character is whitespace then we continue reading - unfolding }
           if (isWhiteSpace(ch) == false)
           {
             // We get back one character 
-            reader.setPosition(pos);
+            reader.seek(pos);
             break;
           }
         } else if (isWhiteSpace(ch) == false)
         {
           // This is CR mode (MacOS), backward one character 
-          reader.setPosition(pos);
+          reader.seek(pos);
         }
       } else if (ch == VFormatUtilities.CHAR_LF)
       {
@@ -225,7 +231,7 @@ public class VFormatReader extends AbstractDocumentReader
         lineNumber++;
         columnNumber = 0;
 
-        pos = reader.getPosition();
+        pos = reader.getStreamPosition();
         errorHandler.warning(new DocumentStreamException(
             DocumentStreamException.ERR_INVALID_LINE_ENDING));
         // This is LF mode (UNIX mode operating systems) 
@@ -234,7 +240,7 @@ public class VFormatReader extends AbstractDocumentReader
         if (isWhiteSpace(ch) == false)
         {
           // This is LF mode, backward one character
-          reader.setPosition(pos);
+          reader.seek(pos);
           break;
         }
       } else
@@ -523,9 +529,9 @@ public class VFormatReader extends AbstractDocumentReader
 
   // The only way to determine if a group is finished is to actually read
   // ahead and if the end is found then the group is finished. 
-  protected boolean isGroupEnd(ChunkInfo current, ChunkInfo info) throws DocumentStreamException
+  protected boolean isGroupEnd(ChunkInfo current, ChunkInfo info) throws DocumentStreamException, IOException
   {
-    long currentPos = reader.getPosition();
+    long currentPos = reader.getStreamPosition();
     String s;
     do
     {
@@ -535,7 +541,7 @@ public class VFormatReader extends AbstractDocumentReader
     String values[] = parseLine(s);
     if (values == null)
     {
-      reader.setPosition(currentPos);
+      reader.seek(currentPos);
       return false;
     }
 
@@ -552,14 +558,14 @@ public class VFormatReader extends AbstractDocumentReader
       }
     } catch (IllegalArgumentException e)
     {
-      reader.setPosition(currentPos);
+      reader.seek(currentPos);
       return false;
     }
-    reader.setPosition(currentPos);
+    reader.seek(currentPos);
     return false;
   }
 
-  protected boolean isDocumentEnd(ChunkInfo current) throws DocumentStreamException
+  protected boolean isDocumentEnd(ChunkInfo current) throws DocumentStreamException, IOException
   {
     // TODO Auto-generated method stub
     return super.isDocumentEnd(current);

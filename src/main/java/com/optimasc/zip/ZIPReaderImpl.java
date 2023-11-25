@@ -1,5 +1,8 @@
 package com.optimasc.zip;
 
+import java.io.DataInput;
+import java.io.EOFException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.Calendar;
@@ -8,11 +11,12 @@ import java.util.Hashtable;
 
 import com.optimasc.date.DOSDate;
 import com.optimasc.date.FiletimeDate;
+import com.optimasc.io.ByteOrder;
+import com.optimasc.io.SeekableDataInputStream;
 import com.optimasc.streams.DocumentInfo;
 import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.StreamFilter;
 import com.optimasc.streams.internal.ChunkInfo;
-import com.optimasc.streams.internal.DataReader;
 import com.optimasc.streams.internal.AbstractDocumentReader;
 import com.optimasc.streams.internal.ResourceChunkInfo;
 
@@ -32,25 +36,24 @@ import com.optimasc.streams.internal.ResourceChunkInfo;
  */
 public class ZIPReaderImpl extends AbstractDocumentReader
 {
-
   protected ZIPUtilities zipValidator;
   protected byte[] filenameBuffer = new byte[65535];
   protected byte[] extraFieldBuffer = new byte[65535];
   protected byte[] commentBuffer = new byte[65535];
+  protected byte[] readBuffer = new byte[64];
   protected long centralDirectoryEntryOffset;
   /** Local header entries */
   protected Hashtable entries;
-  public static final FiletimeDate dateConverter = new FiletimeDate();
 
-  public ZIPReaderImpl(InputStream inputStream, StreamFilter filter) throws DocumentStreamException
+  public ZIPReaderImpl()
   {
-    super(64, inputStream, filter);
+    super(64);
     zipValidator = new ZIPUtilities();
     entries = new Hashtable();
   }
 
-  protected void readChunkHeader(DataReader dataReader, ChunkInfo header)
-      throws DocumentStreamException
+  protected void readChunkHeader(SeekableDataInputStream dataReader, ChunkInfo header)
+      throws DocumentStreamException, IOException
   {
 
     long dataLength;
@@ -73,48 +76,48 @@ public class ZIPReaderImpl extends AbstractDocumentReader
 
     long id;
     header.reset();
-    reader.setPosition(centralDirectoryEntryOffset);
+    reader.seek(centralDirectoryEntryOffset);
     // Read the chunk identifier
-    id = dataReader.read32Little() & 0xFFFFFFFFL;
+    id = dataReader.readUnsignedInt() & 0xFFFFFFFFL;
     if (id != ZIPUtilities.MAGIC_CENTRAL_DIRECTORY_HEADER)
     {
       errorHandler.fatalError(new DocumentStreamException(
           DocumentStreamException.ERR_BLOCK_INVALID_ID));
     }
-
-    // Version made by
-    w = dataReader.read16Little() & 0xFFFF;
+    
+        // Version made by
+    w = dataReader.readUnsignedShort();
     // Version needed to extract 
-    w = dataReader.read16Little() & 0xFFFF;
+    w = dataReader.readUnsignedShort();
     // General purpose bit flag 
-    flags = dataReader.read16Little() & 0xFFFF;
+    flags = dataReader.readUnsignedShort();
     // Compression method
-    compression = dataReader.read16Little() & 0xFFFF;
+    compression = dataReader.readUnsignedShort();
     // Last modification file time    
-    time = dataReader.read16Little() & 0xFFFF;
+    time = dataReader.readUnsignedShort();
     // Last modification file date    
-    date = dataReader.read16Little() & 0xFFFF;
+    date = dataReader.readUnsignedShort();
     // CRC-32 - read little endian and store in big endian
-    crc32 = dataReader.read32Little();
+    crc32 = dataReader.readUnsignedInt();
 
     // compressed size
-    compressedSize = dataReader.read32Little();
+    compressedSize = dataReader.readUnsignedInt();
     // uncompressed size
-    uncompressedSize = dataReader.read32Little() & 0xFFFFFFFFL;
+    uncompressedSize = dataReader.readUnsignedInt();
     // filename length
-    fileNameLength = dataReader.read16Little() & 0xFFFF;
+    fileNameLength = dataReader.readUnsignedShort();
     // extra field length
-    extraFieldLength = dataReader.read16Little() & 0xFFFF;
+    extraFieldLength = dataReader.readUnsignedShort();
     // file comment length
-    commentLength = dataReader.read16Little() & 0xFFFF;
+    commentLength = dataReader.readUnsignedShort();
     // disk number start
-    w = dataReader.read16Little() & 0xFFFF;
+    w = dataReader.readUnsignedShort();
     // internal attributes
-    w = dataReader.read16Little() & 0xFFFF;
+    w = dataReader.readUnsignedShort();
     // external attributes
-    lw = dataReader.read32Little() & 0xFFFFFFFFL;
+    lw = dataReader.readUnsignedInt();
     // external attributes
-    relativeOffset = dataReader.read32Little() & 0xFFFFFFFFL;
+    relativeOffset = dataReader.readUnsignedInt();
 
     dataReader.read(filenameBuffer, 0, fileNameLength);
     dataReader.read(extraFieldBuffer, 0, extraFieldLength);
@@ -150,10 +153,10 @@ public class ZIPReaderImpl extends AbstractDocumentReader
     extHeader.offset = getFileDataOffset(relativeOffset);
     extHeader.size = compressedSize;
     extHeader.type = ChunkInfo.TYPE_CHUNK;
-    extHeader.setRealSize(uncompressedSize);
+    extHeader.setSize(uncompressedSize);
     extHeader.setCompression(ZIPUtilities.compressionToString(compression));
     extHeader.setDigestType("CCITT CRC-32");
-    extHeader.setLastModified(DOSDate.DOSDateAndTimeToCalendar(date, time).getTime());
+    extHeader.setLastModifiedDate(DOSDate.DOSDateAndTimeToCalendar(date, time).getTime());
     // Write the value in big endian
     intBuffer[0] = (byte) ((crc32 >>> 24) & 0xFF);
     intBuffer[1] = (byte) ((crc32 >>> 16) & 0xFF);
@@ -166,8 +169,8 @@ public class ZIPReaderImpl extends AbstractDocumentReader
       parseExtField(extraFieldBuffer, extraFieldLength, extHeader);
     }
 
-    centralDirectoryEntryOffset = reader.getPosition();
-    reader.setPosition(header.offset);
+    centralDirectoryEntryOffset = reader.getStreamPosition();
+    reader.seek(header.offset);
 
     /* Convert the data to attributes */
     extHeader.addStandardAttributes();
@@ -180,7 +183,7 @@ public class ZIPReaderImpl extends AbstractDocumentReader
    * the actual file data. 
    * 
    */
-  protected long getFileDataOffset(long localHeaderOffset) throws DocumentStreamException
+  protected long getFileDataOffset(long localHeaderOffset) throws DocumentStreamException, IOException
   {
     long dataLength;
     int w;
@@ -193,11 +196,11 @@ public class ZIPReaderImpl extends AbstractDocumentReader
     long offset;
     long pos;
 
-    pos = reader.getPosition();
-    reader.setPosition(localHeaderOffset);
+    pos = reader.getStreamPosition();
+    reader.seek(localHeaderOffset);
 
     // Read the chunk identifier
-    id = reader.read32Little() & 0xFFFFFFFFL;
+    id = reader.readUnsignedInt();
     if (id != ZIPUtilities.MAGIC_LOCAL_HEADER)
     {
       errorHandler.fatalError(new DocumentStreamException(DocumentStreamException.ERR_IO));
@@ -206,32 +209,32 @@ public class ZIPReaderImpl extends AbstractDocumentReader
     // Read the entire values to retrieve the name of the file
 
     // Version
-    w = reader.read16Little() & 0xFFFF;
+    w = reader.readUnsignedShort();
     // General purpose bit flag 
-    flags = reader.read16Little() & 0xFFFF;
+    flags = reader.readUnsignedShort();
     // Compression method
-    w = reader.read16Little() & 0xFFFF;
+    w = reader.readUnsignedShort();
     // Last modification file time    
-    w = reader.read16Little() & 0xFFFF;
+    w = reader.readUnsignedShort();
     // Last modification file date    
-    w = reader.read16Little() & 0xFFFF;
+    w = reader.readUnsignedShort();
     // CRC-32
-    lw = reader.read32Little();
+    lw = reader.readUnsignedInt();
     // compressed size
-    compressedSize = reader.read32Little();
+    compressedSize = reader.readUnsignedInt();
     // uncompressed size
-    lw = reader.read32Little();
+    lw = reader.readUnsignedInt();
     // filename length
-    fileNameLength = reader.read16Little() & 0xFFFF;
+    fileNameLength = reader.readUnsignedShort();
     // extra field length
-    extraFieldLength = reader.read16Little() & 0xFFFF;
+    extraFieldLength = reader.readUnsignedShort();
 
-    offset = reader.getPosition() + fileNameLength + extraFieldLength;
+    offset = reader.getStreamPosition() + fileNameLength + extraFieldLength;
 
     if ((flags & ZIPUtilities.DATA_DESCRIPTOR_BIT) == ZIPUtilities.DATA_DESCRIPTOR_BIT)
     {
       // DATA descriptor signature is optional.
-      id = reader.read32Little() & 0xFFFFFFFFL;
+      id = reader.readUnsignedInt();
       if (id != ZIPUtilities.MAGIC_DATA_DESCRIPTOR)
       {
         offset += 8;
@@ -241,7 +244,7 @@ public class ZIPReaderImpl extends AbstractDocumentReader
       }
     }
 
-    reader.setPosition(pos);
+    reader.seek(pos);
     return offset;
   }
 
@@ -310,16 +313,16 @@ public class ZIPReaderImpl extends AbstractDocumentReader
         {
           long mtime = getLongLittle(extraDataBuffer, internalOffset);
           internalOffset += 8;
-          Calendar internalmodificationTime = dateConverter.toCalendar(mtime);
-          chunk.setLastModified(internalmodificationTime.getTime());
+          Calendar internalmodificationTime = FiletimeDate.converter.decode(mtime);
+          chunk.setLastModifiedDate(internalmodificationTime.getTime());
           long atime = getLongLittle(extraDataBuffer, internalOffset);
           internalOffset += 8;
-          Calendar internalAccessTime = dateConverter.toCalendar(atime);
-          chunk.setLastAccessed(internalAccessTime.getTime());
+          Calendar internalAccessTime = FiletimeDate.converter.decode(atime);
+          chunk.setLastAccessedDate(internalAccessTime.getTime());
           long ctime = getLongLittle(extraDataBuffer, internalOffset);
           internalOffset += 8;
-          Calendar internalCreationTime = dateConverter.toCalendar(ctime);
-          chunk.setCreated(internalCreationTime.getTime());
+          Calendar internalCreationTime = FiletimeDate.converter.decode(ctime);
+          chunk.setCreatedDate(internalCreationTime.getTime());
         }
       }
 
@@ -350,17 +353,17 @@ public class ZIPReaderImpl extends AbstractDocumentReader
         long mtime = getIntLittle(extraDataBuffer, offset);
         Date d = new Date();
         d.setTime(mtime * 1000);
-        chunk.setLastModified(d);
+        chunk.setLastModifiedDate(d);
         offset += 4;
         long atime = getIntLittle(extraDataBuffer, offset);
         Date d1 = new Date();
         d1.setTime(mtime * 1000);
-        chunk.setLastAccessed(d1);
+        chunk.setLastAccessedDate(d1);
         offset += 4;
         long ctime = getIntLittle(extraDataBuffer, offset);
         Date d2 = new Date();
         d2.setTime(mtime * 1000);
-        chunk.setCreated(d2);
+        chunk.setCreatedDate(d2);
         offset += 4;
       }
     }
@@ -423,7 +426,7 @@ public class ZIPReaderImpl extends AbstractDocumentReader
    * @return
    * @throws DocumentStreamException
    */
-  protected boolean readEntry() throws DocumentStreamException
+  protected boolean readEntry(SeekableDataInputStream is) throws DocumentStreamException, IOException
   {
     long dataLength;
     int w;
@@ -440,36 +443,37 @@ public class ZIPReaderImpl extends AbstractDocumentReader
     extHeader.reset();
 
     // Read the chunk identifier
-    id = reader.read32Little() & 0xFFFFFFFFL;
+    id = reader.readUnsignedInt();
     if (id != ZIPUtilities.MAGIC_LOCAL_HEADER)
     {
       // Seek back to old position. 
-      reader.setPosition(reader.getPosition() - 4);
+      reader.seek(reader.getStreamPosition() - 4);
       return false;
     }
 
     // Read the entire values to retrieve the name of the file
+    
 
     // Version
-    w = reader.read16Little() & 0xFFFF;
+    w = reader.readUnsignedShort();
     // General purpose bit flag 
-    flags = reader.read16Little() & 0xFFFF;
+    flags = reader.readUnsignedShort();
     // Compression method
-    w = reader.read16Little() & 0xFFFF;
+    w = reader.readUnsignedShort();
     // Last modification file time    
-    w = reader.read16Little() & 0xFFFF;
+    w = reader.readUnsignedShort();
     // Last modification file date    
-    w = reader.read16Little() & 0xFFFF;
+    w = reader.readUnsignedShort();
     // CRC-32
-    lw = reader.read32Little();
+    lw = reader.readUnsignedInt();
     // compressed size
-    compressedSize = reader.read32Little();
+    compressedSize = reader.readUnsignedInt();
     // uncompressed size
-    lw = reader.read32Little();
+    lw = reader.readUnsignedInt();
     // filename length
-    fileNameLength = reader.read16Little() & 0xFFFF;
+    fileNameLength = reader.readUnsignedShort();
     // extra field length
-    extraFieldLength = reader.read16Little() & 0xFFFF;
+    extraFieldLength = reader.readUnsignedShort();
 
     reader.read(filenameBuffer, 0, fileNameLength);
     reader.read(extraFieldBuffer, 0, extraFieldLength);
@@ -496,13 +500,13 @@ public class ZIPReaderImpl extends AbstractDocumentReader
     {
       extHeader.setEncrypted(new Boolean(true));
     }
-    offset = reader.getPosition() + compressedSize;
-    reader.setPosition(offset);
+    offset = reader.getStreamPosition() + compressedSize;
+    reader.seek(offset);
     offset = 0;
     if ((flags & ZIPUtilities.DATA_DESCRIPTOR_BIT) == ZIPUtilities.DATA_DESCRIPTOR_BIT)
     {
       // DATA descriptor signature is optional.
-      id = reader.read32Little() & 0xFFFFFFFFL;
+      id = reader.readUnsignedInt() & 0xFFFFFFFFL;
       if (id != ZIPUtilities.MAGIC_DATA_DESCRIPTOR)
       {
         offset = 8;
@@ -511,11 +515,11 @@ public class ZIPReaderImpl extends AbstractDocumentReader
         offset = 12;
       }
     }
-    reader.setPosition(reader.getPosition() + offset);
+    reader.seek(reader.getStreamPosition() + offset);
     return true;
   }
 
-  protected DocumentInfo readDocumentHeader(DataReader dataReader)
+  protected DocumentInfo readDocumentHeader(SeekableDataInputStream dataReader) throws DocumentStreamException, IOException
   {
     int type;
     long id;
@@ -523,60 +527,60 @@ public class ZIPReaderImpl extends AbstractDocumentReader
     long offset;
     try
     {
-
+      dataReader.setByteOrder(ByteOrder.LITTLE_ENDIAN);
       // Read the chunk identifier
-      pos = dataReader.getPosition();
-      id = dataReader.read32Little() & 0xFFFFFFFFL;
+      pos = dataReader.getStreamPosition();
+      id = dataReader.readUnsignedInt();
       if (id == ZIPUtilities.MAGIC_LOCAL_HEADER)
       {
         type = DocumentInfo.TYPE_LITTLE_ENDIAN;
       } else
         return null;
       DocumentInfo document = new DocumentInfo(null, ZIPUtilities.MIME_TYPE, type,
-          dataReader.getSize());
-      dataReader.setPosition(pos);
+          dataReader.length());
+      dataReader.seek(pos);
 
       /* Read the entry */
-      offset = reader.getPosition();
-      while (readEntry() == true)
+      offset = reader.getStreamPosition();
+      while (readEntry(dataReader) == true)
       {
-        offset = reader.getPosition();
+        offset = reader.getStreamPosition();
       }
       // Now check if we need to skip this data or not
-      id = dataReader.read32Little() & 0xFFFFFFFFL;
+      id = dataReader.readUnsignedInt();
       if (id == ZIPUtilities.MAGIC_ARCHIVE_EXTRA_DATA)
       {
-        dataReader.setPosition(offset + dataReader.read32Little() & 0xFFFFFFFFL);
+        dataReader.seek(offset + dataReader.readUnsignedInt());
       } else
       {
         // Seek back to old position. 
-        reader.setPosition(reader.getPosition() - 4);
+        reader.seek(reader.getStreamPosition() - 4);
       }
-      centralDirectoryEntryOffset = reader.getPosition();
+      centralDirectoryEntryOffset = reader.getStreamPosition();
 
       /* Now find offset to */
       return document;
 
-    } catch (DocumentStreamException e)
+    } catch (EOFException e)
     {
       return null;
     }
   }
 
-  protected boolean isDocumentEnd(ChunkInfo current) throws DocumentStreamException
+  protected boolean isDocumentEnd(ChunkInfo current) throws DocumentStreamException, IOException
   {
     long id;
     long pos;
     // Read the chunk identifier
-    pos = reader.getPosition();
-    reader.setPosition(centralDirectoryEntryOffset);
+    pos = reader.getStreamPosition();
+    reader.seek(centralDirectoryEntryOffset);
     // Read the chunk identifier
-    id = reader.read32Little() & 0xFFFFFFFFL;
+    id = reader.readUnsignedInt();
     if (id != ZIPUtilities.MAGIC_CENTRAL_DIRECTORY_HEADER)
     {
       return true;
     }
-    reader.setPosition(pos);
+    reader.seek(pos);
     return false;
   }
 

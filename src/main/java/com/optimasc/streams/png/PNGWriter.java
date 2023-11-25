@@ -1,113 +1,95 @@
 package com.optimasc.streams.png;
 
+import java.io.IOException;
 import java.util.zip.CRC32;
 
-import org.apache.commons.vfs2.RandomAccessContent;
-
-import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.internal.AbstractDocumentWriter;
 import com.optimasc.streams.internal.ChunkInfo;
-import com.optimasc.streams.riff.RIFFUtilities;
 
 public class PNGWriter extends AbstractDocumentWriter
 {
   public byte[] byteBuffer = new byte[64];
   
-  public PNGWriter(RandomAccessContent outputStream)
-      throws DocumentStreamException
+  public PNGWriter()
   {
-    super(outputStream, true,1);
+    super(true,1);
     validator = new PNGUtilities();
   }
 
   protected void writeChunkHeader(ChunkInfo chunkData)
-      throws DocumentStreamException
+      throws IOException
   {
-    try
-    {
       CRC32 crc = new CRC32();
       chunkData.internalObject = crc;
       String s = validator.chunkIDToObject(chunkData.id);
       byte[] id = s.getBytes();
       // SIZE : Put a fake value currently.
-      dataWriter.write32Big(0);
+      dataWriter.writeInt(0);
       // Chunk identifier 
       dataWriter.write(id, 0, 4);
       /* Calculate CRC-32 of identifier */
       crc.update(id,0,4);
-      chunkData.offset = dataWriter.getPosition();
-    } catch (IllegalArgumentException e)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_ID, chunkData.id.toString());
-    }
+      chunkData.offset = dataWriter.getStreamPosition();
   }
 
   protected void writeFixupChunkHeader(ChunkInfo chunkData)
-      throws DocumentStreamException
+      throws IOException
   {
-    long pos = dataWriter.getPosition();
+    long pos = dataWriter.getStreamPosition();
     // Set to position to where length value should be written (chunkData.offset - 8)
-    dataWriter.setPosition(chunkData.offset-8);
-    dataWriter.write32Big(chunkData.size);
+    dataWriter.seek(chunkData.offset-8);
+    dataWriter.writeInt((int)chunkData.size);
     // Return back to our previous position plus any padding bytes
-    dataWriter.setPosition(pos+chunkData.extraSize);
+    dataWriter.seek(pos+chunkData.extraSize);
   }
 
   protected void writeChunkFooter(ChunkInfo chunkData)
-      throws DocumentStreamException
+      throws IOException
   {
     long crc32Value;
     
-    dataWriter.setPosition(chunkData.offset+chunkData.size);
+    dataWriter.seek(chunkData.offset+chunkData.size);
     crc32Value = ((CRC32)chunkData.internalObject).getValue();
-    dataWriter.write32Big(crc32Value);
+    dataWriter.writeInt((int)crc32Value);
     /* On exit points to the next chunk. */
   }
 
   public void writeStartDocument(String publicID)
-      throws DocumentStreamException
+      throws IOException
   {
-    try
-    {
-      dataWriter.write(PNGUtilities.MAGIC_HEADER, 0, PNGUtilities.MAGIC_HEADER.length);
-    } catch (IllegalArgumentException e)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_ID, publicID);
-    }
+    dataWriter.write(PNGUtilities.MAGIC_HEADER, 0, PNGUtilities.MAGIC_HEADER.length);
   }
 
-  public void writeEndDocument() throws DocumentStreamException
+  public void writeEndDocument() throws IOException
   {
     super.writeEndDocument();
   }
 
-
-  public void warning(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-  }
-
-  public void error(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-  }
-
-  public void fatalError(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-    throw exception;
-  }
-
+  
   /** This calculates the CRC-32 value of the data also. */
-  public void writeOctetString(byte[] buffer, int off, int len) throws DocumentStreamException
+  public void write(byte[] buffer, int off, int len) throws IOException
   {
     CRC32 crc = (CRC32) currentChunk.internalObject;
     crc.update(buffer, off, len);
-    super.writeOctetString(buffer, off, len);
+    super.write(buffer, off, len);
   }
 
-  
+  /** This calculates the CRC-32 value of the data also. */
+  public void write(int b) throws IOException
+  {
+    CRC32 crc = (CRC32) currentChunk.internalObject;
+    w[0] = (byte) b;
+    crc.update(w, 0, 1);
+    super.write(b);
+  }
+
+  /** This calculates the CRC-32 value of the data also. */
+  public void write(byte[] buffer) throws IOException
+  {
+    CRC32 crc = (CRC32) currentChunk.internalObject;
+    crc.update(buffer, 0, buffer.length);
+    super.write(buffer);
+  }
+
 
 }

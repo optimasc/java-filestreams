@@ -1,5 +1,8 @@
 package com.optimasc.streams;
 
+import java.io.IOException;
+import java.io.InputStream;
+
 
 
 /**
@@ -93,7 +96,7 @@ public interface DocumentStreamReader
    * @return the integer code corresponding to the current parse event
    * @throws DocumentStreamException  if there is an error processing the underlying source
    */
-  public int next() throws DocumentStreamException;
+  public int next() throws DocumentStreamException, IOException;
 
   
   /**
@@ -136,7 +139,7 @@ public interface DocumentStreamReader
    * @throws IllegalStateException if this is not a START_ELEMENT, DATA or START_GROUP
    */
   public String getAttributeValue(String namespaceURI,
-                                  String localName)  throws IllegalStateException;
+                                  String localName);
 
   
   /** Returns the namespace of the attribute at the provided index. 
@@ -146,7 +149,7 @@ public interface DocumentStreamReader
    * @param index - the position of the attribute 
    * @return the namespace URI (can be null) 
    */
-  public String getAttributeNamespace(int index) throws IllegalStateException;
+  public String getAttributeNamespace(int index);
   
   /** Returns the local name of the attribute at the provided index. 
    * this method is only valid on a START_ELEMENT, DATA or START_GROUP. 
@@ -155,7 +158,7 @@ public interface DocumentStreamReader
    * @param index - the position of the attribute 
    * @return he localName of the attribute 
    */
-  public String getAttributeLocalName(int index) throws IllegalStateException;
+  public String getAttributeLocalName(int index);
   
 
   /**
@@ -165,7 +168,7 @@ public interface DocumentStreamReader
    * @return returns the number of attributes
    * @throws IllegalStateException if this is not a START_ELEMENT, DATA or START_GROUP
    */
-  public int getAttributeCount() throws IllegalStateException;
+  public int getAttributeCount();
 
   /**
    * Returns the value of the attribute at the
@@ -174,7 +177,7 @@ public interface DocumentStreamReader
    * @return the attribute value
    * @throws IllegalStateException if this is not a START_ELEMENT, DATA or START_GROUP
    */
-  public String getAttributeValue(int index) throws IllegalStateException;
+  public String getAttributeValue(int index);
   
   /** Returns the complete Attribute object at the specified index.
    *  This routine is not compatible with the XML Pull specification
@@ -183,7 +186,7 @@ public interface DocumentStreamReader
    * @param index The index of the attribute to return
    * @return The Attribute instance object
    */
-  public Attribute getAttribute(int index) throws IllegalStateException;
+  public Attribute getAttribute(int index);
 
   /**
    * Returns an integer code that indicates the type
@@ -213,7 +216,7 @@ public interface DocumentStreamReader
    * @throws UnsupportedOperationException if this method is not supported 
    * @throws NullPointerException is if target is null
    */
-   public int getData(byte[] target, int targetStart, int length)  throws DocumentStreamException;
+   public int getData(byte[] target, int targetStart, int length)  throws DocumentStreamException, IOException;
 
   /**
    * Returns the total number of bytes available for this DATA event.  
@@ -221,7 +224,7 @@ public interface DocumentStreamReader
    * @throws java.lang.IllegalStateException if this state is not
    * a valid DATA state.
    */
-  public long getDataSize() throws DocumentStreamException;
+  public long getDataSize() throws DocumentStreamException, IOException;
 
 
   /**
@@ -259,6 +262,20 @@ public interface DocumentStreamReader
    * @see #getErrorHandler
    */
   public void setErrorHandler (ErrorHandler handler);
+  
+  /** When a filter is provided, the implementation will call out the filter to 
+   *  determine if the chunk is skipped or not. Default implementation
+   *  does not skip any chunk. 
+   * 
+   * @param filter [in] The filter.
+   */
+  public void setFilter(StreamFilter filter);
+  
+  /** Return the current active stream filter.
+   * 
+   * @return The current stream filter. 
+   */
+  public StreamFilter getFilter();
 
 
   /**
@@ -279,6 +296,20 @@ public interface DocumentStreamReader
    *    is not of the specified document type.
    * 
    */
-  public DocumentInfo getDocumentInfo() throws DocumentStreamException;
+  public DocumentInfo getDocumentInfo() throws DocumentStreamException, IOException;
+
+  /** Sets the input stream the parser is going to process. This call 
+   *  resets the parser state and sets the event type to the initial value 
+   *  START_DOCUMENT.
+   *  
+   *  <p>It is to note that the input stream requires to support 
+   *  <code>reset()</code> and <code>available()</code>.
+   * 
+   * @param is [in] The input stream that will be used for parsing the data.
+   * @param inputEncoding [in] The input encoding, or <code>null</code> if
+   *   it should be auto-detected.
+   */
+  public void setInput(InputStream is, String inputEncoding) throws DocumentStreamException;
+
 
 }

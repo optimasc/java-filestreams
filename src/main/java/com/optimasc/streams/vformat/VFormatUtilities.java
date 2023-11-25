@@ -118,5 +118,13 @@ public class VFormatUtilities extends ChunkUtilities
     return id.toString();
   }
 
+  public void validateChunkSize(long size) throws IllegalArgumentException
+  {
+  }
+
+  public void validateGroupSize(long size) throws IllegalArgumentException
+  {
+  }
+
 }
 

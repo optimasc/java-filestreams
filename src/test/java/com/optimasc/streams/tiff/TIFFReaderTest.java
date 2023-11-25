@@ -44,9 +44,10 @@ public class TIFFReaderTest extends TestCase implements StreamFilter
 
     try
     {
-
-      TIFFReader reader = new TIFFReader(getClass()
-          .getResourceAsStream("/res/rembrant1.tif"), new DefaultStreamFilter());
+      InputStream is = getClass()
+          .getResourceAsStream("/res/rembrant1.tif");
+      TIFFReader reader = new TIFFReader();
+      reader.setInput(is, null);
       TestUtilities.parse(reader, null);
     } catch (DocumentStreamException e)
     {

@@ -125,9 +125,9 @@ public class RIFFReaderTest extends TestCase implements StreamFilter
     byte[] buffer = new byte[1024*1024];
     try
     {
-
-      RIFFReader reader = new RIFFReader(getClass()
-          .getResourceAsStream("/res/sample1.avi"), new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/sample1.avi");
+      RIFFReader reader = new RIFFReader();
+      reader.setInput(is, null);
       TestUtilities.parse(reader,elements);
     } catch (DocumentStreamException e)
     {
@@ -171,9 +171,11 @@ public class RIFFReaderTest extends TestCase implements StreamFilter
     int chunkNr = 0;
     try
     {
-
-      RIFFReader reader = new RIFFReader(getClass()
-          .getResourceAsStream("/res/sample1.avi"),this);
+      InputStream is = getClass().getResourceAsStream("/res/sample1.avi");
+      RIFFReader reader = new RIFFReader();
+      reader.setInput(is, null);
+      reader.setFilter(this);
+      
       while (reader.hasNext())
       {
         int id = reader.next();
@@ -213,7 +215,10 @@ public class RIFFReaderTest extends TestCase implements StreamFilter
     {
       fail();
     }
-    
+    catch (IOException e)
+    {
+      fail();
+    }    
 
   }
   
@@ -228,9 +233,12 @@ public class RIFFReaderTest extends TestCase implements StreamFilter
     int chunkNr = 0;
     try
     {
-
-      RIFFReader reader = new RIFFReader(getClass()
-          .getResourceAsStream("/res/dummy1.rif"),this);
+      InputStream is = getClass()
+          .getResourceAsStream("/res/dummy1.rif");
+      RIFFReader reader = new RIFFReader();
+      reader.setInput(is, null);
+      reader.setFilter(this);
+      
       while (reader.hasNext())
       {
         int id = reader.next();
@@ -246,6 +254,11 @@ public class RIFFReaderTest extends TestCase implements StreamFilter
       // We should get an exception code here - since the format is invalid.
       return;
     }
+    catch (IOException e)
+    {
+      // We should get an exception code here - since the format is invalid.
+      return;
+    }    
     fail();
   }
   

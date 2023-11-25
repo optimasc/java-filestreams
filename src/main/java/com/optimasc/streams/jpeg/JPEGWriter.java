@@ -1,6 +1,6 @@
 package com.optimasc.streams.jpeg;
 
-import org.apache.commons.vfs2.RandomAccessContent;
+import java.io.IOException;
 
 import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.internal.ChunkInfo;
@@ -8,39 +8,23 @@ import com.optimasc.streams.internal.AbstractDocumentWriter;
 
 public class JPEGWriter extends AbstractDocumentWriter
 {
-  public JPEGWriter(RandomAccessContent outputStream) throws DocumentStreamException
+  public JPEGWriter()
   {
-    super(outputStream, true, 0);
+    super(true, 0);
     validator = new JPEGUtilities();
   }
 
-  public void warning(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-  }
-
-  public void error(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-  }
-
-  public void fatalError(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-    throw exception;
-  }
-
   protected void writeChunkHeader(ChunkInfo chunkData)
-      throws DocumentStreamException
+      throws IOException
   {
     int id = Integer.parseInt(chunkData.id.toString());
-    chunkData.offset = dataWriter.getPosition();
+    chunkData.offset = dataWriter.getStreamPosition();
     if (id != JPEGUtilities.JPEG_ID_DATA)
     {
       // Write segment marker
-      dataWriter.write8(0xff);
+      dataWriter.writeByte(0xff);
       // Write segment identifier
-      dataWriter.write8(id);
+      dataWriter.writeByte(id);
     }
     // Now check if we need to write the size element
     switch (id)
@@ -61,16 +45,16 @@ public class JPEGWriter extends AbstractDocumentWriter
       break;
     // These segments have the length marker  
     default:
-      dataWriter.write16Big(0);
+      dataWriter.writeShort(0);
     }
   }
 
   protected void writeFixupChunkHeader(ChunkInfo chunkData)
-      throws DocumentStreamException
+      throws IOException 
   {
     int offset = 0;
     int id = Integer.parseInt(chunkData.id.toString());
-    long pos = dataWriter.getPosition();
+    long pos = dataWriter.getStreamPosition();
     // JPEG_ID_DATA does not have a segment identifier - but all others do
     if (id != JPEGUtilities.JPEG_ID_DATA)
     {
@@ -79,13 +63,13 @@ public class JPEGWriter extends AbstractDocumentWriter
       if (chunkData.size > JPEGUtilities.JPEG_MAX_DATA_SEGMENT_SIZE)
       {
         // Groups should never be padded.
-        throw new DocumentStreamException(
-            DocumentStreamException.ERR_BLOCK_INVALID_SIZE, chunkData.id.toString());
+        throw new IllegalArgumentException(
+            DocumentStreamException.ERR_BLOCK_INVALID_SIZE+" '"+chunkData.id.toString()+"'");
       }
       // Skip segment marker and segment identifier to go to size
       offset += 2;
     }
-    dataWriter.setPosition(chunkData.offset+offset);
+    dataWriter.seek(chunkData.offset+offset);
     // Now check if we need to write the size element
     switch (id)
     {
@@ -106,33 +90,33 @@ public class JPEGWriter extends AbstractDocumentWriter
     // These segments have the length marker, add 2 to the size, as the size includes itself!  
     default:
     {
-      dataWriter.write16Big((int)chunkData.size+2);
+      dataWriter.writeShort((int)chunkData.size+2);
     }
     }
     // Return back to our previous position plus any padding bytes
-    dataWriter.setPosition(pos+chunkData.extraSize);
+    dataWriter.seek(pos+chunkData.extraSize);
   }
 
   protected void writeChunkFooter(ChunkInfo chunkData)
-      throws DocumentStreamException
+      throws IOException
   {
     // Nothing for JPEG files
   }
 
   public void writeStartDocument(String publicID)
-      throws DocumentStreamException
+      throws IOException
   {
-//    dataWriter.write8(JPEGUtilities.JPEG_MARKER);
-//    dataWriter.write8(JPEGUtilities.JPEG_ID_SOI);
+//    dataWriter.writeByte(JPEGUtilities.JPEG_MARKER);
+//    dataWriter.writeByte(JPEGUtilities.JPEG_ID_SOI);
   }
   
   public void writeEndDocument()
-  throws DocumentStreamException
+  throws IOException
   {
     super.writeEndDocument();
-//    dataWriter.write8(JPEGUtilities.JPEG_MARKER);
-//    dataWriter.write8(JPEGUtilities.JPEG_ID_EOI);
+//    dataWriter.writeByte(JPEGUtilities.JPEG_MARKER);
+//    dataWriter.writeByte(JPEGUtilities.JPEG_ID_EOI);
   }
-  
+
 
 }

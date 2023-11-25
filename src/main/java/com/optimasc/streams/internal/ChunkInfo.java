@@ -29,7 +29,7 @@ import com.optimasc.streams.Attribute;
 /**
  * Container to store information on a header of a chunk or group.
  * 
- * @author carl
+ * @author Carl Eric Codere
  */
 public class ChunkInfo
 {

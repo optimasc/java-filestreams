@@ -1,6 +1,6 @@
 package com.optimasc.streams.riff;
 
-import org.apache.commons.vfs2.RandomAccessContent;
+import java.io.IOException;
 
 import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.internal.ChunkInfo;
@@ -10,20 +10,16 @@ public class RIFFWriter extends AbstractDocumentWriter
 {
   protected long startDocumentPosition;
   
-
-  public RIFFWriter(RandomAccessContent outputStream, boolean bigEndian)
-      throws DocumentStreamException
+  public RIFFWriter()
   {
-    super(outputStream, bigEndian,255);
+    super(false,255);
     validator = new RIFFUtilities();
   }
 
   protected void writeChunkHeader(ChunkInfo chunkData)
-      throws DocumentStreamException
+      throws IOException
   {
-    try
-    {
-      chunkData.offset = dataWriter.getPosition();
+      chunkData.offset = dataWriter.getStreamPosition();
       String s = chunkData.id.toString();
       byte[] id = s.getBytes();
       // If a group the group identifier
@@ -32,7 +28,7 @@ public class RIFFWriter extends AbstractDocumentWriter
           // Group header
           dataWriter.write(RIFFUtilities.LIST_HEADER, 0, 4);
           // SIZE : Put a fake value currently.
-          dataWriter.write32Big(0);
+          dataWriter.writeInt(0);
           // ID
           dataWriter.write(id, 0, 4);
       } else
@@ -40,25 +36,20 @@ public class RIFFWriter extends AbstractDocumentWriter
         // Chunk identifier
         dataWriter.write(id, 0, 4);
         // SIZE : Put a fake value currently.
-        dataWriter.write32Big(0);
+        dataWriter.writeInt(0);
       }
-    } catch (IllegalArgumentException e)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_ID, chunkData.id.toString());
-    }
   }
 
   protected void writeFixupChunkHeader(ChunkInfo chunkData)
-      throws DocumentStreamException
+      throws IOException
   {
-    long pos = dataWriter.getPosition();
+    long pos = dataWriter.getStreamPosition();
     if (chunkData.type == ChunkInfo.TYPE_CHUNK)
     {
       // We must add a padding byte if the value is odd
       if ((chunkData.size & 0x01) == 0x01)
       {
-        dataWriter.write8((byte) 0);
+        dataWriter.write((byte) 0);
         chunkData.extraSize = 1;
       }
     } else
@@ -67,18 +58,16 @@ public class RIFFWriter extends AbstractDocumentWriter
       if ((chunkData.size & 0x01) == 0x01)
       {
       // Groups should never be padded.
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_SIZE, chunkData.id.toString());
+      throw new IllegalStateException(
+          DocumentStreamException.ERR_BLOCK_INVALID_SIZE+" '" +chunkData.id.toString()+"'");
       }
       // Add the group identifier
       chunkData.size += 4;
     }
     // Set to position of chunk past the ID and go directly to size
-    dataWriter.setPosition(chunkData.offset + 4);
-    if (bigEndian)
-      dataWriter.write32Big(chunkData.size);
-     else
-       dataWriter.write32Little(chunkData.size);
+    dataWriter.seek(chunkData.offset + 4);
+    validator.validateChunkSize(chunkData.size);
+    dataWriter.writeInt((int)chunkData.size);
 
     // Add the size to the current group if any exists.
     if (groups.isEmpty()==false)
@@ -89,7 +78,7 @@ public class RIFFWriter extends AbstractDocumentWriter
     }
     
     // Return back to our previous position plus any padding bytes
-    dataWriter.setPosition(pos+chunkData.extraSize);
+    dataWriter.seek(pos+chunkData.extraSize);
   }
 
   // RIFF has no chunk footer
@@ -99,70 +88,32 @@ public class RIFFWriter extends AbstractDocumentWriter
   }
 
   public void writeStartDocument(String publicID)
-      throws DocumentStreamException
+      throws IOException
   {
-    try
-    {
-      startDocumentPosition = dataWriter.getPosition();
-      String s = validator.groupIDToObject(publicID);
-      byte[] id = s.getBytes();
+    startDocumentPosition = dataWriter.getStreamPosition();
+    String s = validator.groupIDToObject(publicID);
+    byte[] id = s.getBytes();
 
-      // RIFF/RIFX
-      if (bigEndian)
-        dataWriter.write(RIFFUtilities.RIFX_HEADER, 0, 4);
-      else
-        dataWriter.write(RIFFUtilities.RIFF_HEADER, 0, 4);
-      // SIZE : Put a fake value currently.
-      dataWriter.write32Big(0);
-      // ID
-      dataWriter.write(id, 0, 4);
-
-    } catch (IllegalArgumentException e)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_ID, publicID);
-    }
+    // RIFF/RIFX
+    dataWriter.write(RIFFUtilities.RIFF_HEADER, 0, 4);
+    // SIZE : Put a fake value currently.
+    dataWriter.writeInt(0);
+    // ID
+    dataWriter.write(id, 0, 4);
   }
 
-  public void writeEndDocument() throws DocumentStreamException
+  public void writeEndDocument() throws IOException
   {
     // Do some validation first.
     super.writeEndDocument();
     
-    long size = dataWriter.getSize();
+    long size = dataWriter.length();
     // Set position to size of RIFF GROUP
-    dataWriter.setPosition(startDocumentPosition + 4);
+    dataWriter.seek(startDocumentPosition + 4);
     // SIZE : Put the real value
-    if (validator.isValidGroupSize(size)==false)
-    {
-      throw new DocumentStreamException(
-          DocumentStreamException.ERR_BLOCK_INVALID_SIZE);
-    }
-    if (bigEndian)
-     dataWriter.write32Big(size-8);
-    else
-      dataWriter.write32Little(size-8);
+    validator.validateGroupSize(size);
+    dataWriter.writeInt((int)(size-8));
     // ID - skipped
   }
-
-
-  public void warning(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-  }
-
-  public void error(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-  }
-
-  public void fatalError(DocumentStreamException exception)
-      throws DocumentStreamException
-  {
-    throw exception;
-  }
-
-
-  
 
 }

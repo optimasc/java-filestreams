@@ -5,16 +5,17 @@ import java.io.InputStream;
 import java.util.Stack;
 import java.util.Vector;
 
+import com.optimasc.io.FilteredDataInputStream;
+import com.optimasc.io.SeekableDataInputStream;
+import com.optimasc.streams.Attribute;
 import com.optimasc.streams.DefaultStreamFilter;
 import com.optimasc.streams.DocumentInfo;
 import com.optimasc.streams.DocumentStreamConstants;
 import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.DocumentStreamReader;
 import com.optimasc.streams.ErrorHandler;
-import com.optimasc.streams.IllegalStateException;
 import com.optimasc.streams.Location;
 import com.optimasc.streams.StreamFilter;
-import com.optimasc.streams.Attribute;
 
 /**
  * Class that implements a basic generic parser for chunk based streams. This
@@ -49,7 +50,7 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
   protected Stack nestingInfo;
 
   /** Data reader implementation based on inputStream */
-  protected DataReader reader;
+  protected SeekableDataInputStream reader;
   /** Document information */
   protected DocumentInfo document;
   /** Current error handler registered - default one fails on fatal errors */
@@ -59,29 +60,20 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
    * Creates this instance of a linear parser that accepts nesting levels up to
    * the specified level.
    *
-   * @param maxNesting Maximum nesting level allowed for this structured format.
-   * @param inputStream The inputstream to read from
-   * @param filter
+   * @param maxNesting
+   *          Maximum nesting level allowed for this structured format.
    * @throws DocumentStreamException
    */
-  public AbstractDocumentReader(int maxNesting, InputStream inputStream, StreamFilter filter)
-      throws DocumentStreamException
+  public AbstractDocumentReader(int maxNesting)
   {
     //   nestingInfoRoot = new IElement[maxNesting+1];
     this.maxNestingLevel = maxNesting;
-    reader = new DataReader(inputStream, this);
     nestingInfo = new Stack();
     nextState = DocumentStreamConstants.START_DOCUMENT;
     currentState = DocumentStreamConstants.START_DOCUMENT;
     currentChunk = null;
     nextChunk = newChunkInfo();
-    if (filter==null)
-    {
-      this.filter = new DefaultStreamFilter();
-    } else
-    {
-      this.filter = filter; 
-    }
+    filter = new DefaultStreamFilter();
     errorHandler = this;
   }
 
@@ -96,8 +88,8 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
    *          The actual structure containing information on the chunk that
    *          should be filled in.
    */
-  protected abstract void readChunkHeader(DataReader dataReader,
-      ChunkInfo header) throws DocumentStreamException;
+  protected abstract void readChunkHeader(SeekableDataInputStream dataReader, ChunkInfo header)
+      throws DocumentStreamException, IOException;
 
   /**
    * This method should read the signature of the document, validate if the
@@ -109,21 +101,24 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
    * 
    * @param dataReader
    *          The reader API containing the stream to read from
-   * @return null if this document is not of this type, otherwise information on
-   *         this document
-   * @throws DocumentStreamException
+   * @return null if this document is not of this type, or a premature
+   *         end of file is reached, otherwise information on this document
+   * @throws DocumentStreamException If the data is invalid.
+   * @throw IOException If there is an I/O Exception other than  a premature end of stream
+   *   reached.
    */
-  protected abstract DocumentInfo readDocumentHeader(DataReader dataReader)
-      throws DocumentStreamException;
+  protected abstract DocumentInfo readDocumentHeader(SeekableDataInputStream dataReader)
+      throws IOException, DocumentStreamException;
 
   public Object getProperty(String name) throws IllegalArgumentException
   {
     // TODO Auto-generated method stub
     return null;
   }
-  
-  /** This routine should return an instance of a Chunk, it can be overriden
-   *  to return more specialized chunk types.
+
+  /**
+   * This routine should return an instance of a Chunk, it can be overriden to
+   * return more specialized chunk types.
    * 
    * @return Allocated ChunkInfo structure
    */
@@ -148,104 +143,107 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
    * END_ELEMENT -> START_GROUP |START_ELEMENT | END_DOCUMENT
    * 
    */
-  public int next() throws DocumentStreamException
+  public int next() throws DocumentStreamException, IOException
   {
     // Go to next state
     currentState = nextState;
 
     switch (currentState)
     {
-    case DocumentStreamConstants.START_DOCUMENT:
-      // If the document information already has been read, do not re-read it.
-      if (document == null)
-      {
-      document = readDocumentHeader(reader);
-      if (document == null)
-      {
-        errorHandler.fatalError(new DocumentStreamException(
-            DocumentStreamException.ERR_INVALID_STREAM));
-      }
-      }
-      readChunkHeader(reader, nextChunk);
-      if (nextChunk.type == ChunkInfo.TYPE_CHUNK)
-      {
-        nextState = DocumentStreamConstants.START_ELEMENT;
-      } else
-      {
-        nextState = DocumentStreamConstants.START_GROUP;
-      }
-      break;
-    case DocumentStreamConstants.DATA:
-      dataSizeLeft = currentChunk.size;
-      if (filter.accept(this) == false)
-      {
-        skipData(currentChunk.size+currentChunk.extraSize);
-      }
-      nextState = DocumentStreamConstants.END_ELEMENT;
-      break;
-
-    // Verify if there is more data or not.  
-    case DocumentStreamConstants.END_GROUP:
-      //----- Verify if one or more groups have not been finished
-      if ((maxNestingLevel > 0) && (nestingInfo.empty() == false))
-      {
-        // verify if we closed a group
-        do
+      case DocumentStreamConstants.START_DOCUMENT:
+        // If the document information already has been read, do not re-read it.
+        if (document == null)
         {
-          ChunkInfo info = (ChunkInfo) nestingInfo.peek();
-          if ((info != null) && (isGroupEnd(currentChunk, info)))
+          document = readDocumentHeader(reader);
+          if (document == null)
           {
-            // Now we should point to the end group
-            currentChunk = (ChunkInfo) nestingInfo.pop();
-            currentState = DocumentStreamConstants.END_GROUP;
-            nextState = DocumentStreamConstants.END_GROUP;
-            return currentState;
-          } else
-          {
-            break;
+            errorHandler.fatalError(new DocumentStreamException(
+                DocumentStreamException.ERR_INVALID_STREAM));
           }
-        } while (false);
-      }
-      // Check if end of document
-      if ((document != null) && (isDocumentEnd(currentChunk)))
-      {
-        nextState = DocumentStreamConstants.END_DOCUMENT;
-        currentState = nextState;
-        verifyEndOfDocument();
-        return nextState;
-      }
-      readChunkHeader(reader, nextChunk);
-      if (nextChunk.type == ChunkInfo.TYPE_CHUNK)
-      {
-        nextState = DocumentStreamConstants.START_ELEMENT;
-        currentState = nextState;
-        processStartElement();
-      } else
-      {
-        nextState = DocumentStreamConstants.START_GROUP;
-        currentState = nextState;
+        }
+        readChunkHeader(reader, nextChunk);
+        if (nextChunk.type == ChunkInfo.TYPE_CHUNK)
+        {
+          nextState = DocumentStreamConstants.START_ELEMENT;
+        }
+        else
+        {
+          nextState = DocumentStreamConstants.START_GROUP;
+        }
+        break;
+      case DocumentStreamConstants.DATA:
+        dataSizeLeft = currentChunk.size;
+        if (filter.accept(this) == false)
+        {
+          skipData(currentChunk.size + currentChunk.extraSize);
+        }
+        nextState = DocumentStreamConstants.END_ELEMENT;
+        break;
+
+      // Verify if there is more data or not.  
+      case DocumentStreamConstants.END_GROUP:
+        //----- Verify if one or more groups have not been finished
+        if ((maxNestingLevel > 0) && (nestingInfo.empty() == false))
+        {
+          // verify if we closed a group
+          do
+          {
+            ChunkInfo info = (ChunkInfo) nestingInfo.peek();
+            if ((info != null) && (isGroupEnd(currentChunk, info)))
+            {
+              // Now we should point to the end group
+              currentChunk = (ChunkInfo) nestingInfo.pop();
+              currentState = DocumentStreamConstants.END_GROUP;
+              nextState = DocumentStreamConstants.END_GROUP;
+              return currentState;
+            }
+            else
+            {
+              break;
+            }
+          } while (false);
+        }
+        // Check if end of document
+        if ((document != null) && (isDocumentEnd(currentChunk)))
+        {
+          nextState = DocumentStreamConstants.END_DOCUMENT;
+          currentState = nextState;
+          verifyEndOfDocument();
+          return nextState;
+        }
+        readChunkHeader(reader, nextChunk);
+        if (nextChunk.type == ChunkInfo.TYPE_CHUNK)
+        {
+          nextState = DocumentStreamConstants.START_ELEMENT;
+          currentState = nextState;
+          processStartElement();
+        }
+        else
+        {
+          nextState = DocumentStreamConstants.START_GROUP;
+          currentState = nextState;
+          processStartGroup();
+        }
+        break;
+      case DocumentStreamConstants.START_GROUP:
         processStartGroup();
-      }
-      break;
-    case DocumentStreamConstants.START_GROUP:
-      processStartGroup();
-      break;
-    case DocumentStreamConstants.END_ELEMENT:
-      // Skip all the data that we did not read.
-      skipData(dataSizeLeft+currentChunk.extraSize);
-      // Hack: next state is POSSIBLY an END group
-      nextState = DocumentStreamConstants.END_GROUP;
-      break;
-    case DocumentStreamConstants.START_ELEMENT:
-      processStartElement();
-      break;
-    case DocumentStreamConstants.END_DOCUMENT:
-      break;
+        break;
+      case DocumentStreamConstants.END_ELEMENT:
+        // Skip all the data that we did not read.
+        skipData(dataSizeLeft + currentChunk.extraSize);
+        // Hack: next state is POSSIBLY an END group
+        nextState = DocumentStreamConstants.END_GROUP;
+        break;
+      case DocumentStreamConstants.START_ELEMENT:
+        processStartElement();
+        break;
+      case DocumentStreamConstants.END_DOCUMENT:
+        break;
     }
     return currentState;
   }
 
-  private void processStartElement() throws DocumentStreamException
+  private void processStartElement() throws DocumentStreamException, IOException
   {
     currentChunk = (ChunkInfo) nextChunk.clone();
     if (filter.accept(this))
@@ -257,31 +255,39 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
         nextState = DocumentStreamConstants.DATA;
         // The number of bytes to skip normally if the value is accepted.
       }
-    } else
+    }
+    else
     {
       nextState = DocumentStreamConstants.END_ELEMENT;
-      skipData(currentChunk.size+currentChunk.extraSize);
+      skipData(currentChunk.size + currentChunk.extraSize);
     }
   }
 
-  private void processStartGroup() throws DocumentStreamException
+  private void processStartGroup() throws DocumentStreamException, IOException
   {
     currentChunk = (ChunkInfo) nextChunk.clone();
     nestingInfo.push(currentChunk);
     if (filter.accept(this))
     {
-      readChunkHeader(reader, nextChunk);
+      try {
+       readChunkHeader(reader, nextChunk);
+      } catch (IOException e)
+      {
+        errorHandler.fatalError(new DocumentStreamException(DocumentStreamException.ERR_IO,e));
+      }
       if (nextChunk.type == ChunkInfo.TYPE_CHUNK)
       {
         nextState = DocumentStreamConstants.START_ELEMENT;
-      } else
+      }
+      else
       {
         nextState = DocumentStreamConstants.START_GROUP;
       }
-    } else
+    }
+    else
     {
       nextState = DocumentStreamConstants.END_GROUP;
-      skipData(currentChunk.size+currentChunk.extraSize);
+      skipData(currentChunk.size + currentChunk.extraSize);
     }
   }
 
@@ -303,20 +309,22 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
 
   }
 
-  public String getAttributeValue(String namespaceURI, String localName) throws IllegalStateException
+  public String getAttributeValue(String namespaceURI, String localName)
+      throws IllegalStateException
   {
     Vector v;
     Attribute attr;
     int i;
     // Return the value given by the current chunk - only if this is a START_ELEMEMT or START_GROUP section
-    if (((currentState == DocumentStreamConstants.START_GROUP) || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT))==false)
+    if (((currentState == DocumentStreamConstants.START_GROUP)
+        || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT)) == false)
       throw new IllegalStateException("Invalid state.");
-    
+
     v = currentChunk.getAttributes();
-    
+
     for (i = 0; i < v.size(); i++)
     {
-      attr = (Attribute)v.elementAt(i);
+      attr = (Attribute) v.elementAt(i);
       if (namespaceURI != null)
       {
         if (namespaceURI.equals(attr.getNamespaceURI()))
@@ -324,7 +332,8 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
           if (localName.equals(attr.getLocalName()))
             return attr.getValue();
         }
-      } else
+      }
+      else
       {
         if (localName.equals(attr.getLocalName()))
           return attr.getValue();
@@ -336,7 +345,8 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
   public int getAttributeCount() throws IllegalStateException
   {
     // Return the value given by the current chunk - only if this is a START_ELEMEMT or START_GROUP section
-    if (((currentState == DocumentStreamConstants.START_GROUP) || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT))==false)
+    if (((currentState == DocumentStreamConstants.START_GROUP)
+        || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT)) == false)
       throw new IllegalStateException("Invalid state.");
     return currentChunk.getAttributes().size();
   }
@@ -345,9 +355,10 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
   {
     Attribute attr;
     // Return the value given by the current chunk - only if this is a START_ELEMEMT or START_GROUP section
-    if (((currentState == DocumentStreamConstants.START_GROUP) || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT))==false)
+    if (((currentState == DocumentStreamConstants.START_GROUP)
+        || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT)) == false)
       throw new IllegalStateException("Invalid state.");
-    attr = (Attribute)currentChunk.getAttributes().elementAt(index);
+    attr = (Attribute) currentChunk.getAttributes().elementAt(index);
     if (attr != null)
     {
       return attr.getValue();
@@ -359,9 +370,9 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
   {
     return currentState;
   }
-  
+
   public int getData(byte[] target, int targetStart, int length)
-      throws DocumentStreamException
+      throws DocumentStreamException, IOException
   {
     // Return the value given by the current chunk - only if this is a DATA section
     if (currentState != DocumentStreamConstants.DATA)
@@ -376,19 +387,19 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
     }
 
     // Verify if trying to read back - we can only read forward.
-/*    if ((currentChunk.offset) < (reader.position))
-    {
-      errorHandler.error(new DocumentStreamException(
-          "Trying to data that has already been read."));
+    /*    if ((currentChunk.offset) < (reader.position))
+        {
+          errorHandler.error(new DocumentStreamException(
+              "Trying to data that has already been read."));
 
-    }*/
+        }*/
 
     read(target, targetStart, length);
     dataSizeLeft = dataSizeLeft - length;
     return length;
   }
 
-  public long getDataSize() throws DocumentStreamException
+  public long getDataSize() throws DocumentStreamException, IOException
   {
     // Return the value given by the current chunk - only if this is a DATA section
     if (currentState != DocumentStreamConstants.DATA)
@@ -415,13 +426,13 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
    * @throws DocumentStreamException
    * 
    */
-  protected void verifyEndOfDocument() throws DocumentStreamException
+  protected void verifyEndOfDocument() throws DocumentStreamException, IOException
   {
     if (nestingInfo.empty() == false)
       errorHandler.warning(new DocumentStreamException(
           DocumentStreamException.ERR_INVALID_NESTING));
 
-    if ((reader.position > reader.size))
+    if ((reader.getStreamPosition() > reader.length()))
       errorHandler.warning(new DocumentStreamException(
           DocumentStreamException.ERR_EXTRA_DATA));
   }
@@ -430,20 +441,19 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
   {
     this.errorHandler = handler;
   }
+  
 
   public ErrorHandler getErrorHandler()
   {
     return this.errorHandler;
   }
 
-  public void warning(DocumentStreamException exception)
-      throws DocumentStreamException
+  public void warning(DocumentStreamException exception) throws DocumentStreamException
   {
     return;
   }
 
-  public void error(DocumentStreamException exception)
-      throws DocumentStreamException
+  public void error(DocumentStreamException exception) throws DocumentStreamException
   {
     return;
   }
@@ -453,16 +463,15 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
   {
     throw exception;
   }
-  
-  
-  
+
   public String getAttributeNamespace(int index) throws IllegalStateException
   {
     // Return the value given by the current chunk - only if this is a START_ELEMEMT or START_GROUP section
-    if (((currentState == DocumentStreamConstants.START_GROUP) || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT))==false)
+    if (((currentState == DocumentStreamConstants.START_GROUP)
+        || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT)) == false)
       throw new IllegalStateException("Invalid state.");
     Attribute attr;
-    attr = (Attribute)currentChunk.toAttributes().elementAt(index);
+    attr = (Attribute) currentChunk.toAttributes().elementAt(index);
     if (attr != null)
     {
       return attr.getNamespaceURI();
@@ -474,9 +483,10 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
   {
     Attribute attr;
     // Return the value given by the current chunk - only if this is a START_ELEMEMT or START_GROUP section
-    if (((currentState == DocumentStreamConstants.START_GROUP) || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT))==false)
+    if (((currentState == DocumentStreamConstants.START_GROUP)
+        || (currentState == DocumentStreamConstants.DATA) || (currentState == DocumentStreamConstants.START_ELEMENT)) == false)
       throw new IllegalStateException("Invalid state.");
-    attr = (Attribute)currentChunk.toAttributes().elementAt(index);
+    attr = (Attribute) currentChunk.toAttributes().elementAt(index);
     if (attr != null)
     {
       return attr.getLocalName();
@@ -484,38 +494,51 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
     return null;
   }
 
+  
   //----------------------------------- Needs to be overriden for special formats -------------------------------------
-  protected void skipData(long size) throws DocumentStreamException
+  protected void skipData(long size) throws DocumentStreamException, IOException
   {
-    reader.skip(size);
+    reader.seek(size+reader.getStreamPosition());
   }
-  
-  protected void read(byte[] target, int targetOffset, int length) throws DocumentStreamException
+
+  protected void read(byte[] target, int targetOffset, int length)
+      throws DocumentStreamException
   {
-    reader.read(target, targetOffset, length);
+    try
+    {
+      reader.readFully(target, targetOffset, length);
+    } catch (IOException e)
+    {
+      errorHandler.fatalError(new DocumentStreamException(DocumentStreamException.ERR_IO,
+          e));
+    }
   }
-  
-  /** Checks if the group is ended or not.
+
+  /**
+   * Checks if the group is ended or not.
    * 
-   * @param currentChunk The current / last chunk processed
-   * @param info The group chunk on the stack
+   * @param currentChunk
+   *          The current / last chunk processed
+   * @param info
+   *          The group chunk on the stack
    * @return true if the group is ended otherwise false.
    */
-  protected boolean isGroupEnd(ChunkInfo current, ChunkInfo info) throws DocumentStreamException
+  protected boolean isGroupEnd(ChunkInfo current, ChunkInfo info) 
+      throws DocumentStreamException, IOException
   {
-    if (reader.position >= (info.offset + info.size))
+    if (reader.getStreamPosition() >= (info.offset + info.size))
       return true;
     return false;
   }
-  
-  protected boolean isDocumentEnd(ChunkInfo current) throws DocumentStreamException
+
+  protected boolean isDocumentEnd(ChunkInfo current) throws DocumentStreamException, IOException
   {
-    if (reader.position >= document.getSize())
+    if (reader.getStreamPosition() >= document.getSize())
       return true;
     return false;
   }
-  
-  public DocumentInfo getDocumentInfo() throws DocumentStreamException
+
+  public DocumentInfo getDocumentInfo() throws DocumentStreamException, IOException
   {
     if (document == null)
     {
@@ -526,8 +549,54 @@ public abstract class AbstractDocumentReader implements DocumentStreamReader,
 
   public Attribute getAttribute(int index) throws IllegalStateException
   {
-    return (Attribute)currentChunk.getAttributes().elementAt(index);
-    
+    return (Attribute) currentChunk.getAttributes().elementAt(index);
+  }
+
+  public void setInput(InputStream is, String inputEncoding)
+      throws DocumentStreamException
+  {
+
+    if (is.markSupported()==false)
+    {
+      throw new IllegalArgumentException("InputStream must support mark.");
+    }
+    is.mark(Integer.MAX_VALUE);
+    try
+    {
+      if (is.available()==0)
+      {
+        throw new DocumentStreamException(DocumentStreamException.ERR_INVALID_STREAM,"Stream must support available()");
+      }
+    if (is instanceof SeekableDataInputStream)
+    {
+      this.reader = (SeekableDataInputStream)is;
+    } else
+    {
+      try
+      {
+        this.reader = new FilteredDataInputStream(is);
+      } catch (IOException e)
+      {
+        throw new DocumentStreamException(DocumentStreamException.ERR_IO,"");
+      }
+      
+    }
+    } catch (IOException e1)
+    {
+      throw new DocumentStreamException(DocumentStreamException.ERR_IO,"");
+    }
+  }
+
+  public void setFilter(StreamFilter filter)
+  {
+    this.filter = filter;
+  }
+
+  public StreamFilter getFilter()
+  {
+    return filter;
   }
   
+  
+
 }

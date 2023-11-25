@@ -8,15 +8,6 @@ public class PNGUtilities extends ChunkUtilities
    
    public static final byte[] MAGIC_HEADER =  {(byte)137,80,78,71,13,10,26,10};
 
-  public boolean isValidChunkSize(long size)
-  {
-    if ((size > Integer.MAX_VALUE) || (size < 0))
-    {
-      return false;
-    }
-    return true;
-  }
-
   /** Validates according to the PNG specification that this is a valid 
    *  chunk identifier.
    */
@@ -38,6 +29,33 @@ public class PNGUtilities extends ChunkUtilities
       }
     }
     return id;
+  }
+
+  /** According to the PNG Specification 2nd Edition, the value
+   *  read should be considered unsigned, but only values until
+   *  Integer.MAX_VALUE are supported.
+   */
+  public void validateChunkSize(long size) throws IllegalArgumentException
+  {
+    if ((size > Integer.MAX_VALUE) || (size < 0))
+    {
+      throw new IllegalArgumentException("Size of element must be between 0 and "+Integer.toString(Integer.MAX_VALUE));
+    }
+  }
+
+  public void validateGroupSize(long size) throws IllegalArgumentException
+  {
+    validateChunkSize(size);
+  }
+
+  public void isReserved(Object id) throws IllegalArgumentException
+  {
+  }
+
+  // No groups in PNG specification.
+  public String groupIDToObject(Object id) throws IllegalArgumentException
+  {
+    return null;
   }    
    
    

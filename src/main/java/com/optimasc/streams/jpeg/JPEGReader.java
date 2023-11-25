@@ -1,13 +1,14 @@
 package com.optimasc.streams.jpeg;
 
-import java.io.InputStream;
+import java.io.EOFException;
+import java.io.IOException;
 
+import com.optimasc.io.ByteOrder;
+import com.optimasc.io.SeekableDataInputStream;
 import com.optimasc.streams.DocumentInfo;
 import com.optimasc.streams.DocumentStreamException;
-import com.optimasc.streams.StreamFilter;
-import com.optimasc.streams.internal.ChunkInfo;
-import com.optimasc.streams.internal.DataReader;
 import com.optimasc.streams.internal.AbstractDocumentReader;
+import com.optimasc.streams.internal.ChunkInfo;
 
 /**
  * Implements a JPEG reader.
@@ -17,7 +18,6 @@ import com.optimasc.streams.internal.AbstractDocumentReader;
  */
 public class JPEGReader extends AbstractDocumentReader
 {
-
   public byte[] byteBuffer = new byte[4];
   protected boolean bigEndian;
   // Contains the image data.
@@ -28,17 +28,15 @@ public class JPEGReader extends AbstractDocumentReader
   boolean endOfDocument;
   
   
-
-  public JPEGReader(InputStream inputStream, StreamFilter filter)
-      throws DocumentStreamException
+  public JPEGReader()
   {
-    super(64, inputStream, filter);
+    super(64);
     bigEndian = true;
     dataHeader = newChunkInfo();
   }
 
-  protected void readChunkHeader(DataReader dataReader, ChunkInfo header)
-      throws DocumentStreamException
+  protected void readChunkHeader(SeekableDataInputStream dataReader, ChunkInfo header)
+      throws DocumentStreamException, IOException
   {
 
     int w;
@@ -57,7 +55,7 @@ public class JPEGReader extends AbstractDocumentReader
     marker = false;
     do
     {
-      id = dataReader.read8();
+      id = dataReader.readUnsignedByte();
       //  At least one marker has been found 
       if (id == JPEGUtilities.JPEG_MARKER)
         marker = true;
@@ -92,7 +90,7 @@ public class JPEGReader extends AbstractDocumentReader
     
     
     // Read in the size 
-    w = dataReader.read16Big() & 0xffff;
+    w = dataReader.readUnsignedShort();
 
     // Decrement by 2, because the length contains these length bytes 
     if (w > 0)
@@ -107,16 +105,16 @@ public class JPEGReader extends AbstractDocumentReader
       SOSFound = true;
       dataHeader.reset();
       dataHeader.size = 0;
-      long oldpos = dataReader.getPosition();
-      dataReader.setPosition(oldpos + header.size);
+      long oldpos = reader.getStreamPosition();
+      dataReader.skipBytes((int)header.size);
       // If the SOS has been found, create an actual DATA block 
       while (true)
       {
-        int b1 = dataReader.read8();
+        int b1 = dataReader.readUnsignedByte();
         dataHeader.size++;
         if (b1 == JPEGUtilities.JPEG_MARKER)
         {
-          b1 = dataReader.read8();
+          b1 = dataReader.readUnsignedByte();
           dataHeader.size++;
           ;
           if (b1 == (JPEGUtilities.JPEG_MAGIC_EOI_SIGNATURE & 0xff))
@@ -125,7 +123,7 @@ public class JPEGReader extends AbstractDocumentReader
             dataHeader.size = dataHeader.size - 2;
             dataHeader.type = ChunkInfo.TYPE_CHUNK;
             dataHeader.id = new Integer(JPEGUtilities.JPEG_ID_DATA);
-            dataReader.setPosition(oldpos);
+            dataReader.seek(oldpos);
             break;
           }
         }
@@ -133,24 +131,24 @@ public class JPEGReader extends AbstractDocumentReader
     }
   }
 
-  protected DocumentInfo readDocumentHeader(DataReader dataReader)
+  protected DocumentInfo readDocumentHeader(SeekableDataInputStream dataReader) throws IOException
   {
-    DocumentInfo document = new DocumentInfo("", JPEGUtilities.MIME_TYPE, 0,
-        dataReader.getSize());
+    dataReader.setByteOrder(ByteOrder.BIG_ENDIAN);
     // Read the chunk identifier
     try
     {
-      dataReader.read(byteBuffer, 0, 2);
-      int w = (byteBuffer[0] << 8) | (byteBuffer[1]);
+      long length = dataReader.length();
+      long oldpos = dataReader.getStreamPosition();
+      DocumentInfo document = new DocumentInfo("", JPEGUtilities.MIME_TYPE, 0,length);
+      int w = dataReader.readUnsignedShort();
       if (w == JPEGUtilities.JPEG_MAGIC_SOI_SIGNATURE)
       {
         // check the file tailer
-        dataReader.setPosition(dataReader.getSize() - 2);
-        dataReader.read(byteBuffer, 0, 2);
-        w = (byteBuffer[0] << 8) | (byteBuffer[1]);
+        dataReader.seek(length-2);
+        w = dataReader.readUnsignedShort();
         if (w == JPEGUtilities.JPEG_MAGIC_EOI_SIGNATURE)
         {
-          dataReader.setPosition(0);
+          dataReader.seek(oldpos);
           return document;
         }
       } else
@@ -159,11 +157,11 @@ public class JPEGReader extends AbstractDocumentReader
         check the data
       */
       {
-        dataReader.setPosition(2);
-        w = dataReader.read8();
+        dataReader.skip(2);
+        w = dataReader.readUnsignedByte();
         if (w == JPEGUtilities.JPEG_MARKER)
         {
-          w = dataReader.read8();
+          w = dataReader.readUnsignedByte();
           /* If the second segment is one of these types,
               it is probably a JPEG file, even though
               it contains extra data at the end of the file. */
@@ -185,12 +183,12 @@ public class JPEGReader extends AbstractDocumentReader
             case JPEGUtilities.JPEG_ID_APP13:
             case JPEGUtilities.JPEG_ID_APP14:
             case JPEGUtilities.JPEG_ID_APP15:
-              dataReader.setPosition(0);
+              dataReader.seek(oldpos);
               return document;
           }
         }
       }
-    } catch (DocumentStreamException e)
+    } catch (EOFException e)
     {
       return null;
     }
@@ -203,7 +201,7 @@ public class JPEGReader extends AbstractDocumentReader
    * 
    */
   protected boolean isDocumentEnd(ChunkInfo current)
-      throws DocumentStreamException
+      throws DocumentStreamException, IOException
   {
     /* Check if the current chunk is Scan image data, then 
      * for sure, nothing is left after this.
@@ -217,7 +215,7 @@ public class JPEGReader extends AbstractDocumentReader
     return super.isDocumentEnd(current);
   }
 
-  protected void verifyEndOfDocument() throws DocumentStreamException
+  protected void verifyEndOfDocument() throws DocumentStreamException, IOException
   {
     /* If we know that the end of the document has been reached,
      * but there is still some data to read, we know there is 
@@ -226,15 +224,15 @@ public class JPEGReader extends AbstractDocumentReader
     if (endOfDocument)
     {
       /** The 2 bytes represent the EOI marker */
-      if ((reader.getPosition()+2) < (reader.getSize()))
-      {
-        errorHandler.warning(new DocumentStreamException(
-            DocumentStreamException.ERR_EXTRA_DATA));
-        
-      } else
-      {
-        super.verifyEndOfDocument();
-      }
+        if ((reader.getStreamPosition()+2) < (reader.length()))
+        {
+          errorHandler.warning(new DocumentStreamException(
+              DocumentStreamException.ERR_EXTRA_DATA));
+          
+        } else
+        {
+          super.verifyEndOfDocument();
+        }
     }
     
   }

@@ -4,15 +4,14 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 
-import org.apache.commons.vfs2.RandomAccessContent;
-
+import com.optimasc.io.FileDataOutputStream;
 import com.optimasc.stream.TestUtilities;
 import com.optimasc.streams.DefaultStreamFilter;
 import com.optimasc.streams.DocumentInfo;
 import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.DocumentStreamReader;
-import com.optimasc.streams.FileSeekableOutputStream;
 import com.optimasc.streams.jpeg.JPEGReader;
 import com.optimasc.streams.jpeg.JPEGWriter;
 
@@ -40,28 +39,29 @@ public class RIFFWriterTest extends TestCase
   {
     try
     {
-      RandomAccessContent stream = new FileSeekableOutputStream("test.rif");
-      RIFFWriter writer = new RIFFWriter(stream,false);
+      OutputStream stream = new FileDataOutputStream("test.rif");
+      RIFFWriter writer = new RIFFWriter();
+      writer.setOutput(stream, null);
       writer.writeStartDocument("AVI ");
       writer.writeStartGroup("INFO",null);
       writer.writeEndGroup();
       writer.writeStartGroup("INF2",null);
         writer.writeStartElement("AUTH",null);
-        writer.writeOctet(1);
-        writer.writeOctet(2);
-        writer.writeOctet(3);
+        writer.writeByte(1);
+        writer.writeByte(2);
+        writer.writeByte(3);
         writer.writeEndElement();
       
         writer.writeStartElement("AUT2",null);
-        writer.writeOctet(4);
-        writer.writeOctet(5);
-        writer.writeOctet(6);
-        writer.writeOctet(7);
+        writer.writeByte(4);
+        writer.writeByte(5);
+        writer.writeByte(6);
+        writer.writeByte(7);
         writer.writeEndElement();
         
         
         writer.writeStartElement("DATE",null);
-        writer.writeCharacters("2013-04-06");
+        writer.writeChars("2013-04-06");
         writer.writeEndElement();
         
       writer.writeEndGroup();
@@ -70,7 +70,7 @@ public class RIFFWriterTest extends TestCase
     } catch (FileNotFoundException e)
     {
       fail();
-    } catch (DocumentStreamException e)
+    } catch (IOException e)
     {
       fail();
     }
@@ -81,10 +81,13 @@ public class RIFFWriterTest extends TestCase
       DocumentStreamReader reader;
       
     try {
-        reader = new RIFFReader(getClass()
-                  .getResourceAsStream("/res/sample1.avi"),new DefaultStreamFilter());
-        RandomAccessContent stream = new FileSeekableOutputStream("sample1.avi");
-        RIFFWriter writer = new RIFFWriter(stream,reader.getDocumentInfo().getStreamType()==DocumentInfo.TYPE_BIG_ENDIAN);
+        InputStream is = getClass()
+            .getResourceAsStream("/res/sample1.avi");
+        reader = new RIFFReader();
+        reader.setInput(is, null);
+        OutputStream stream = new FileDataOutputStream("sample1.avi");
+        RIFFWriter writer = new RIFFWriter();
+        writer.setOutput(stream, null);
         TestUtilities.copy(reader, writer);
         stream.close();
         

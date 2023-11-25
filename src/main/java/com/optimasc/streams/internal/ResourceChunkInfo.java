@@ -3,7 +3,8 @@ package com.optimasc.streams.internal;
 import java.util.Calendar;
 import java.util.Date;
 
-import com.optimasc.date.BaseISO8601Date;
+import com.optimasc.archive.ArchiveEntry;
+import com.optimasc.text.BaseISO8601Date;
 import com.optimasc.streams.Attribute;
 
 public class ResourceChunkInfo extends ChunkInfo implements ResourceType
@@ -18,7 +19,7 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
   String  encryptionType;
   int     encryptionKeyLength;
   
-  protected long    realSize;
+  protected long    uncompressedSize;
   String  comment;
   
   public Boolean isEncrypted()
@@ -26,17 +27,17 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
     return encrypted;
   }
 
-  public Date getLastModified()
+  public Date getLastModifiedDate()
   {
     return lastModified;
   }
 
-  public Date getLastAccessed()
+  public Date getLastAccessedDate()
   {
     return lastAccessed;
   }
 
-  public Date getCreated()
+  public Date getCreatedDate()
   {
     return created;
   }
@@ -66,7 +67,7 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
     digest = null;
     digestType = null;
     compression = null;
-    realSize = -1;
+    uncompressedSize = -1;
     comment = null;
     encryptionType = null;
     encryptionKeyLength = -1;
@@ -85,7 +86,7 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
       digest = f1.digest;
       digestType = f1.digestType;
       compression = f1.compression;
-      realSize = f1.realSize;
+      uncompressedSize = f1.uncompressedSize;
       comment = f1.comment;
       encryptionType = f1.encryptionType;
       encryptionKeyLength = f1.encryptionKeyLength;
@@ -126,7 +127,7 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
       return false;
     if (digest.length != other.digest.length)
       return false;
-    if (realSize != other.realSize)
+    if (uncompressedSize != other.uncompressedSize)
       return false;
     if (encryptionType.equals(other.encryptionType)==false)
       return false;
@@ -140,9 +141,9 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
     return true;
   }
 
-  public long getRealSize()
+  public long getSize()
   {
-    return realSize;
+    return uncompressedSize;
   }
 
   public String getComment()
@@ -191,9 +192,9 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
     this.compression = compression;
   }
 
-  public void setRealSize(long realSize)
+  public void setSize(long realSize)
   {
-    this.realSize = realSize;
+    this.uncompressedSize = realSize;
   }
 
   public void setComment(String comment)
@@ -201,17 +202,17 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
     this.comment = comment;
   }
 
-  public void setLastModified(Date lastModified)
+  public void setLastModifiedDate(Date lastModified)
   {
     this.lastModified = lastModified;
   }
 
-  public void setCreated(Date created)
+  public void setCreatedDate(Date created)
   {
     this.created = created;
   }
 
-  public void setLastAccessed(Date lastAccessed)
+  public void setLastAccessedDate(Date lastAccessed)
   {
     this.lastAccessed = lastAccessed;
   }
@@ -255,7 +256,7 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
      cal3.setTime(lastAccessed);
      attributes.addElement(new Attribute(ATTRIBUTE_NAMESPACE_DATE_ACCESSED,ATTRIBUTE_NAME_DATE_ACCESSED,BaseISO8601Date.toString(cal3, true, false)));
     }
-    attributes.addElement(new Attribute(ATTRIBUTE_NAMESPACE_SIZE,ATTRIBUTE_NAME_SIZE,new Long(realSize).toString()));
+    attributes.addElement(new Attribute(ATTRIBUTE_NAMESPACE_SIZE,ATTRIBUTE_NAME_SIZE,new Long(uncompressedSize).toString()));
     if (digestType != null)
     {
       attributes.addElement(new Attribute(ATTRIBUTE_NAMESPACE_HASH_TYPE,ATTRIBUTE_NAME_HASH_TYPE,digestType));
@@ -275,6 +276,16 @@ public class ResourceChunkInfo extends ChunkInfo implements ResourceType
   protected String hexByte(byte b)
   {
     return Integer.toHexString(0x100 | (b & 0xFF)).substring(1).toUpperCase();
+  }
+
+  public String getName()
+  {
+    return id.toString();
+  }
+
+  public boolean isDirectory()
+  {
+    return false;
   }
   
 

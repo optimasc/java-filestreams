@@ -1,5 +1,7 @@
 package com.optimasc.streams;
 
+import java.io.IOException;
+
 /**
  * The base exception for unexpected processing errors.  This Exception
  * class is used to report well-formedness errors as well as unexpected

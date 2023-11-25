@@ -3,10 +3,12 @@ package com.optimasc.streams.internal;
 import java.util.Date;
 import java.util.Vector;
 
+import com.optimasc.archive.ArchiveEntry;
+
 
 /** Represents a generic resource and defines standard attributes for
     resource types. */
-public interface ResourceType
+public interface ResourceType extends ArchiveEntry
 {
   public static final String ATTRIBUTE_NAME_ENCRYPTION = "encryption";
   public static final String ATTRIBUTE_NAMESPACE_ENCRYPTION = "";
@@ -70,17 +72,17 @@ public interface ResourceType
   /** Returns the last modification timestamp of the resource. 
    *  If this is not supported or is unknown, the value returned is NULL. 
    */
-  public Date getLastModified();
+  public Date getLastModifiedDate();
   
   /** Returns the last access timestamp of the resource. If this
    *  is not supported, the value returned is NULL. 
    */
-  public Date getLastAccessed();
+  public Date getLastAccessedDate();
   
   /** Returns the creation timestamp of the resource. If this
    *  is not supported, the value returned is NULL. 
    */
-  public Date getCreated();
+  public Date getCreatedDate();
   
   /** Returns the hash of the resource. If this is
    *  is not supported, the value returned is NULL.
@@ -107,7 +109,7 @@ public interface ResourceType
    *  if not known.
    *  
    */
-  public long getRealSize();
+  public long getSize();
   
   /** Return the comment associated with this resource, or NULL 
    *  if not known or unsupported.

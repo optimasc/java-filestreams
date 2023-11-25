@@ -2,9 +2,9 @@ package com.optimasc.stream;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.IllegalStateException;
 import java.util.Arrays;
 import java.util.Stack;
-import java.util.Vector;
 
 import junit.framework.TestCase;
 
@@ -181,7 +181,10 @@ public class TestUtilities extends TestCase
           break;
         }
       } // end while
-    } catch (com.optimasc.streams.IllegalStateException e)
+    } catch (IllegalStateException e)
+    {
+      fail();
+    } catch (IOException e)
     {
       fail();
     }
@@ -247,7 +250,7 @@ public class TestUtilities extends TestCase
 	          break;
 	        case DocumentStreamConstants.DATA:
 	            reader.getData(buffer, 0, (int)reader.getDataSize());
-	            writer.writeOctetString(buffer, 0, (int)reader.getDataSize());
+	            writer.write(buffer, 0, (int)reader.getDataSize());
 	          break;
 	        case DocumentStreamConstants.END_ELEMENT:
               writer.writeEndElement();
@@ -261,8 +264,9 @@ public class TestUtilities extends TestCase
 	      } // end while
 	    } catch (DocumentStreamException e)
 	    {
+	      e.printStackTrace();
 	      fail();
-	    } catch (com.optimasc.streams.IllegalStateException e)
+	    } catch (IOException e)
 	    {
 	      fail();
 	    }
@@ -276,24 +280,28 @@ public class TestUtilities extends TestCase
     for (i = 0; i < data1.length; i++)
     {
       if (data1[i] != data2[i])
-        assertEquals("Data comparison failure",data1[i],data2[i]);
+        assertEquals("Data comparison failure at offset "+Integer.toString(i),data1[i],data2[i]);
     }
   }
   
   
-  public static boolean binaryDiff(InputStream aStream, InputStream bStream) throws IOException 
+  public static boolean binaryDiff(InputStream originalStream, InputStream bStream) throws IOException 
   {
     final int BLOCK_SIZE = 128;
     byte[] aBuffer = new byte[BLOCK_SIZE];
     byte[] bBuffer = new byte[BLOCK_SIZE];
-    while (true) {
-        int aByteCount = aStream.read(aBuffer, 0, BLOCK_SIZE);
+    while (true) 
+    {
+        int aByteCount = originalStream.read(aBuffer, 0, BLOCK_SIZE);
         bStream.read(bBuffer, 0, BLOCK_SIZE);
-        if (aByteCount < 0) {
+        if (aByteCount < 0) 
+        {
             return true;
         }
-        if (!Arrays.equals(aBuffer, bBuffer)) {
-            return false;
+        for (int i = 0; i < aBuffer.length; i++)
+        {
+          if (aBuffer[i] != bBuffer[i])
+            assertEquals("Data comparison failure at offset "+Integer.toString(i),aBuffer[i],bBuffer[i]);
         }
     }  
   }

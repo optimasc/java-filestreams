@@ -1,14 +1,17 @@
 package com.optimasc.streams.tiff;
 
+import java.io.EOFException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Vector;
 
+import com.optimasc.io.ByteOrder;
+import com.optimasc.io.SeekableDataInputStream;
 import com.optimasc.streams.Attribute;
 import com.optimasc.streams.DocumentInfo;
 import com.optimasc.streams.DocumentStreamException;
 import com.optimasc.streams.StreamFilter;
 import com.optimasc.streams.internal.ChunkInfo;
-import com.optimasc.streams.internal.DataReader;
 import com.optimasc.streams.internal.AbstractDocumentReader;
 
 /**
@@ -85,27 +88,26 @@ public class TIFFReader extends AbstractDocumentReader
     }
   }
 
-  public TIFFReader(InputStream inputStream, StreamFilter filter)
-      throws DocumentStreamException
+  public TIFFReader()
   {
-    super(64, inputStream, filter);
+    super(64);
     tiffValidator = new TIFFUtilities();
     currentChunkIndex = 0;
     currentImageIndex = 0;
   }
 
-  private int processIFD(DataReader reader, ChunkInfo information)
-      throws DocumentStreamException
+  private int processIFD(SeekableDataInputStream reader, ChunkInfo information)
+      throws DocumentStreamException, IOException
   {
     long valueOffset;
     long count;
     int typid;
     // Read the directory entry.
-    information.id = new Integer(readWord() & 0xFFFF);
+    information.id = new Integer(reader.readUnsignedShort());
     // Return the datatype 
-    typid = readWord() & 0xFFFF;
-    count = readLongword() & 0xFFFFFFFF;
-    valueOffset = readLongword() & 0xFFFFFFFF;
+    typid = reader.readUnsignedShort();
+    count = reader.readUnsignedInt();
+    valueOffset = reader.readUnsignedInt();
     information.size = count * TIFFUtilities.fieldTypeToSize(typid);
     information.type = ChunkInfo.TYPE_CHUNK;
     // If the size is less or equal than 4 then the value
@@ -113,7 +115,7 @@ public class TIFFReader extends AbstractDocumentReader
     // the data value.
     if (information.size <= LONGWORD_SIZE)
     {
-      information.offset = reader.getPosition() - LONGWORD_SIZE;
+      information.offset = reader.getStreamPosition() - LONGWORD_SIZE;
     } else
     {
       information.offset = valueOffset;
@@ -133,15 +135,15 @@ public class TIFFReader extends AbstractDocumentReader
    * 
    * @throws DocumentStreamException
    */
-  private long addEntries(DataReader reader, Vector entries, int group)
-      throws DocumentStreamException
+  private long addEntries(SeekableDataInputStream reader, Vector entries, int group)
+      throws DocumentStreamException, IOException
   {
     int i;
     int dirEntries;
     long totalSize = 0;
     ChunkInfo localInfo;
     // Get the number of directory entries 
-    dirEntries = readWord() & 0xFFFF;
+    dirEntries = reader.readUnsignedShort();
     for (i = 0; i < dirEntries; i++)
     {
       localInfo = newChunkInfo();
@@ -152,8 +154,8 @@ public class TIFFReader extends AbstractDocumentReader
     return totalSize;
   }
 
-  protected void readChunkHeader(DataReader dataReader, ChunkInfo header)
-      throws DocumentStreamException
+  protected void readChunkHeader(SeekableDataInputStream dataReader, ChunkInfo header)
+      throws DocumentStreamException, IOException
   {
     long IFDPos;
     int maxIdx;
@@ -172,25 +174,25 @@ public class TIFFReader extends AbstractDocumentReader
       IFDPos = IFDPosition;
       do
       {
-        dataReader.setPosition(IFDPos);
+        dataReader.seek(IFDPos);
         currentImage = new ImageInformation();
         imageCollection.addElement(currentImage);
 
         // Get the number of directory entries 
-        dirEntries = readWord() & 0xFFFF;
+        dirEntries = dataReader.readUnsignedShort();
         for (i = 0; i < dirEntries; i++)
         {
           localInfo = newChunkInfo();
           typid = processIFD(dataReader, localInfo);
-          position = dataReader.getPosition();
+          position = dataReader.getStreamPosition();
           // Call this recursively.
           if (localInfo.id.equals(TAG_ID_GPS_POINTER))
           {
             if (typid == TIFFUtilities.TIFF_TYPE_LONG)
             {
-              dataReader.setPosition(localInfo.offset);
-              IFDPos = readLongword() & 0xFFFFFFFF;
-              dataReader.setPosition(IFDPos);
+              dataReader.seek(localInfo.offset);
+              IFDPos = dataReader.readUnsignedInt();
+              dataReader.seek(IFDPos);
               addEntries(dataReader, currentImage.chunks,
                   TIFFUtilities.GPS_GROUP);
             } else
@@ -201,9 +203,9 @@ public class TIFFReader extends AbstractDocumentReader
           {
             if (typid == TIFFUtilities.TIFF_TYPE_LONG)
             {
-              dataReader.setPosition(localInfo.offset);
-              IFDPos = readLongword() & 0xFFFFFFFF;
-              dataReader.setPosition(IFDPos);
+              dataReader.seek(localInfo.offset);
+              IFDPos = dataReader.readUnsignedInt();
+              dataReader.seek(IFDPos);
               addEntries(dataReader, currentImage.chunks, TIFFUtilities.EXIF_GROUP);
             } else
               errorHandler.error(new DocumentStreamException(
@@ -211,8 +213,8 @@ public class TIFFReader extends AbstractDocumentReader
                       .toString()));
           } else if (localInfo.id.equals(TAG_ID_STRIPOFFSETS))
           {
-            long tmpPos = dataReader.getPosition();
-            dataReader.setPosition(localInfo.offset);
+            long tmpPos = dataReader.getStreamPosition();
+            dataReader.seek(localInfo.offset);
             if (typid == TIFFUtilities.TIFF_TYPE_SHORT)
             {
               maxIdx = (int) (localInfo.size / WORD_SIZE);
@@ -220,7 +222,7 @@ public class TIFFReader extends AbstractDocumentReader
 
               for (j = 0; j < maxIdx; j++)
               {
-                currentImage.stripOffsets[j] = readWord() & 0xFFFF;
+                currentImage.stripOffsets[j] = dataReader.readUnsignedShort();
               }
             }
             else
@@ -229,24 +231,24 @@ public class TIFFReader extends AbstractDocumentReader
               currentImage.stripOffsets = new long[maxIdx];
               for (j = 0; j < maxIdx; j++)
               {
-                currentImage.stripOffsets[j] = readLongword();
+                currentImage.stripOffsets[j] = dataReader.readUnsignedInt();
               }
             }
-            dataReader.setPosition(tmpPos);
+            dataReader.seek(tmpPos);
           }
           else
           // These two arrays give information on the data 
           if (localInfo.id.equals(TAG_ID_STRIPBYTECOUNTS))
           {
-            long tmpPos = dataReader.getPosition();
-            dataReader.setPosition(localInfo.offset);
+            long tmpPos = dataReader.getStreamPosition();
+            dataReader.seek(localInfo.offset);
             if (typid == TIFFUtilities.TIFF_TYPE_SHORT)
             {
               maxIdx = (int) (localInfo.size / WORD_SIZE);
               currentImage.stripByteCounts = new long[maxIdx];
               for (j = 0; j < maxIdx; j++)
               {
-                currentImage.stripByteCounts[j] = readWord() & 0xFFFF;
+                currentImage.stripByteCounts[j] = dataReader.readUnsignedShort();
               }
             }
             else
@@ -255,20 +257,20 @@ public class TIFFReader extends AbstractDocumentReader
               currentImage.stripByteCounts = new long[maxIdx];
               for (j = 0; j < maxIdx; j++)
               {
-                currentImage.stripByteCounts[j] = readLongword();
+                currentImage.stripByteCounts[j] = dataReader.readUnsignedInt();
               }
             }
-            dataReader.setPosition(tmpPos);
+            dataReader.seek(tmpPos);
           }
           else
           {
             currentImage.chunks.addElement(new TagInformation(
                 TIFFUtilities.TIFF_GROUP, localInfo));
           }
-          dataReader.setPosition(position);
+          dataReader.seek(position);
         } // end for
-        IFDPos = readLongword() & 0xFFFFFFFF;
-      } while ((dataReader.getPosition() < dataReader.getSize())
+        IFDPos = dataReader.readUnsignedInt();
+      } while ((dataReader.getStreamPosition() < dataReader.length())
           && (IFDPos != 0));
       currentImageIndex = 0;
       currentChunkIndex = -1;
@@ -314,7 +316,7 @@ public class TIFFReader extends AbstractDocumentReader
   }
 
   private void processChunk(ChunkInfo header, ImageInformation imageInfo)
-      throws DocumentStreamException
+      throws DocumentStreamException, IOException
   {
     if (currentChunkIndex == -1)
     {
@@ -340,57 +342,39 @@ public class TIFFReader extends AbstractDocumentReader
       }
       // Copy the header information
       header.copy(tagInfo.info);
-      reader.setPosition(tagInfo.info.offset);
+      reader.seek(tagInfo.info.offset);
       currentChunkIndex++;
     }
   }
 
-  private short readWord() throws DocumentStreamException
-  {
-    if (document.getStreamType() == DocumentInfo.TYPE_BIG_ENDIAN)
-    {
-      return reader.read16Big();
-    } else
-    {
-      return reader.read16Little();
-    }
-  }
 
-  private long readLongword() throws DocumentStreamException
-  {
-    if (document.getStreamType() == DocumentInfo.TYPE_BIG_ENDIAN)
-    {
-      return reader.read32Big();
-    } else
-    {
-      return reader.read32Little();
-    }
-  }
-
-  protected DocumentInfo readDocumentHeader(DataReader dataReader)
+  protected DocumentInfo readDocumentHeader(SeekableDataInputStream dataReader) throws DocumentStreamException, IOException
   {
     int type = DocumentInfo.TYPE_UNKNOWN_ENDIAN;
     try
     {
+      long length = dataReader.available();
       // Read the file identifier and determine the endian of the data
-      dataReader.read(byteBuffer, 0, 2);
+      dataReader.readFully(byteBuffer, 0, 2);
 
       int value = (int) ((byteBuffer[0] << 8) | byteBuffer[1]) & 0xFFFF;
 
       if (value == TIFFUtilities.TIFF_MAGIC_LITTLE_ENDIAN_SIGNATURE)
       {
         type = DocumentInfo.TYPE_LITTLE_ENDIAN;
-        value = dataReader.read16Little() & 0xFFFF;
-        IFDPosition = dataReader.read32Little() & 0xFFFFFFFF;
+        dataReader.setByteOrder(ByteOrder.LITTLE_ENDIAN);
+        value = dataReader.readUnsignedShort();
+        IFDPosition = dataReader.readUnsignedInt();
       } else if (value == TIFFUtilities.TIFF_MAGIC_BIG_ENDIAN_SIGNATURE)
       {
         type = DocumentInfo.TYPE_BIG_ENDIAN;
-        value = dataReader.read16Big() & 0xFFFF;
-        IFDPosition = dataReader.read32Big() & 0xFFFFFFFF;
+        dataReader.setByteOrder(ByteOrder.BIG_ENDIAN);
+        value = dataReader.readUnsignedShort();
+        IFDPosition = dataReader.readUnsignedInt();
       }
       if (value == TIFFUtilities.TIFF_MAGIC_SIGNATURE)
-        return new DocumentInfo("TIFF", "image/tiff", type, dataReader.getSize());
-    } catch (DocumentStreamException e)
+        return new DocumentInfo("TIFF", "image/tiff", type, length);
+    } catch (EOFException e)
     {
       return null;
     }

@@ -1,6 +1,7 @@
 package com.optimasc.streams.vformat;
 
 import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.Vector;
 
@@ -40,8 +41,9 @@ public class VFormatReaderImplTest extends TestCase
   {
     try
     {
-      VFormatReader reader = new VFormatReader(getClass()
-          .getResourceAsStream("/res/sample.vcf"), new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/sample.vcf");
+      VFormatReader reader = new VFormatReader();
+      reader.setInput(is, null);
       TestUtilities.parse(reader, elements);
     } catch (Exception e)
     {

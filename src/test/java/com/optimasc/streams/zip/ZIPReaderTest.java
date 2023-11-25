@@ -3,6 +3,8 @@ package com.optimasc.streams.zip;
 import java.io.FileNotFoundException;
 
 
+import java.io.InputStream;
+
 import com.optimasc.stream.ElementInfo;
 import com.optimasc.stream.TestUtilities;
 import com.optimasc.streams.DefaultStreamFilter;
@@ -48,8 +50,8 @@ public class ZIPReaderTest extends TestCase
     try
     {
 
-      ZIPReaderImpl reader = new ZIPReaderImpl(getClass()
-          .getResourceAsStream("/res/milkmaid_000.zip"), new DefaultStreamFilter());
+      ZIPReaderImpl reader = new ZIPReaderImpl();
+      reader.setInput(getClass().getResourceAsStream("/res/milkmaid_000.zip"), null);
       TestUtilities.parse(reader,test00Elements);
     } catch (DocumentStreamException e)
     {
@@ -80,8 +82,8 @@ public class ZIPReaderTest extends TestCase
     try
     {
 
-      ZIPReaderImpl reader = new ZIPReaderImpl(getClass()
-          .getResourceAsStream("/res/milkmaid_001.zip"), new DefaultStreamFilter());
+      ZIPReaderImpl reader = new ZIPReaderImpl();
+      reader.setInput(getClass().getResourceAsStream("/res/milkmaid_001.zip"), null);
       TestUtilities.parse(reader,test01Elements);
     } catch (DocumentStreamException e)
     {
@@ -94,9 +96,9 @@ public class ZIPReaderTest extends TestCase
 
     try
     {
-
-      ZIPReaderImpl reader = new ZIPReaderImpl(getClass()
-          .getResourceAsStream("/res/milkmaid_002.zip"), new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/milkmaid_002.zip");
+      ZIPReaderImpl reader = new ZIPReaderImpl();
+      reader.setInput(is, null);
       TestUtilities.parse(reader,null);
     } catch (DocumentStreamException e)
     {
@@ -126,8 +128,9 @@ public class ZIPReaderTest extends TestCase
     try
     {
 
-      ZIPReaderImpl reader = new ZIPReaderImpl(getClass()
-          .getResourceAsStream("/res/milkmaid_003.zip"), new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/milkmaid_003.zip");
+      ZIPReaderImpl reader = new ZIPReaderImpl();
+      reader.setInput(is, null);
       TestUtilities.parse(reader,test03Elements);
     } catch (DocumentStreamException e)
     {
@@ -159,8 +162,9 @@ public class ZIPReaderTest extends TestCase
     try
     {
 
-      ZIPReaderImpl reader = new ZIPReaderImpl(getClass()
-          .getResourceAsStream("/res/milkmaid_010.zip"), new DefaultStreamFilter());
+      InputStream is =getClass().getResourceAsStream("/res/milkmaid_010.zip");
+      ZIPReaderImpl reader = new ZIPReaderImpl();
+      reader.setInput(is, null);
       TestUtilities.parse(reader,test10Elements);
     } catch (DocumentStreamException e)
     {
@@ -190,8 +194,9 @@ public class ZIPReaderTest extends TestCase
 
     try
     {
-      ZIPReaderImpl reader = new ZIPReaderImpl(getClass()
-          .getResourceAsStream("/res/milkmaid_011.zip"), new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/milkmaid_011.zip");
+      ZIPReaderImpl reader = new ZIPReaderImpl();
+      reader.setInput(is, null);
       TestUtilities.parse(reader,test11Elements);
     } catch (DocumentStreamException e)
     {
@@ -223,8 +228,9 @@ public class ZIPReaderTest extends TestCase
 
     try
     {
-      ZIPReaderImpl reader = new ZIPReaderImpl(getClass()
-          .getResourceAsStream("/res/milkmaid_012.zip"), new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/milkmaid_012.zip");
+      ZIPReaderImpl reader = new ZIPReaderImpl();
+      reader.setInput(is, null);
       TestUtilities.parse(reader,test12Elements);
     } catch (DocumentStreamException e)
     {
@@ -272,9 +278,9 @@ public class ZIPReaderTest extends TestCase
 
     try
     {
-
-      ZIPReaderImpl reader = new ZIPReaderImpl(getClass()
-          .getResourceAsStream("/res/calgary_002.zip"), new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/calgary_002.zip");
+      ZIPReaderImpl reader = new ZIPReaderImpl();
+      reader.setInput(is, null);
       TestUtilities.parse(reader,testCalgary00Elements);
     } catch (DocumentStreamException e)
     {

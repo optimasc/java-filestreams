@@ -1,13 +1,17 @@
 package com.optimasc.streams;
 
+import java.io.DataOutput;
+import java.io.IOException;
+import java.io.OutputStream;
+
 
 /** Interface that allows creating structured data formats. Each structured
- *  format writer should implement this interface. 
+ *  format writer should implement this interface.  
  * 
  * @author Carl Eric Codere
  *
  */
-public interface DocumentStreamWriter
+public interface DocumentStreamWriter extends DataOutput
 {
   /** Starts a chunk/leaf element with the specified id and attributes
    *  which is active until {@link #writeEndElement()} is called.
@@ -17,10 +21,17 @@ public interface DocumentStreamWriter
    * @param attributes An array of {@link com.optimasc.utils.Attribute} containing
    *   the attributes for this element, this can be null if no attributes
    *   are supplied.
-   * @throws DocumentStreamException
+   * @throws IllegalArgumentException  If the element identifier is not well formed.
+   * @throws IOException If there is an issue writing to the underlying stream.
+   * @throws IllegalStateException 
+   *   <ul>
+   *    <li>If trying to write an element within an element. Elements are leafs of the tree.</li>
+   *    <li>If trying to start an element when it is not allowed for the moment, such as when 
+   *     {@link #writeStartDocument(String)} has not been called first or when this format requires a group to be started
+   *     first.</li>
+   *   </ul>
    */
-  public void writeStartElement(Object id, Attribute[] attributes) 
-    throws DocumentStreamException;
+  public void writeStartElement(Object id, Attribute[] attributes) throws IOException;
 
   /** Starts a group node that contains leaf elements with the specified
    *  ID and attributes.
@@ -30,40 +41,64 @@ public interface DocumentStreamWriter
    * @param attributes An array of {@link com.optimasc.utils.Attribute} containing
    *   the attributes for this element, this can be null if no attributes
    *   are supplied.
-   * @throws DocumentStreamException
+   * @throws IllegalArgumentException  If the group identifier is not well formed.
+   * @throws IOException If there is an issue writing to the underlying stream.
+   * @throws IllegalStateException 
+   *   <ul>
+   *    <li>If trying to write a group within an group and this is not supported
+   *        by the underlying format.</li>
+   *    <li>If trying to start a group when it is not allowed for the moment, such as when 
+   *     {@link #writeStartDocument(String)} has not been called first or when this format requires a group to be started
+   *     first.</li>
+   *   </ul>
    */
-  public void writeStartGroup(Object id, Attribute[] attributes) 
-    throws DocumentStreamException;
+  public void writeStartGroup(Object id, Attribute[] attributes) throws IOException;
   
   /** Closes the currently opened leaf chunk and updates any
    * data as required. The leaf node to close should have
    * been previously opened by {@link #writeStartElement(java.lang.Object, com.optimasc.streams.Attribute[]) }
    *
-   * @throws DocumentStreamException if there is no leaf node started,
-   *   or if maximum allowed nesting has been reached, or if the size
-   *   of the data written to this element is not allowed.
+   * @throws IllegalArgumentException  If the size of the data to be written
+   *   is not supported or is invalid.
+   * @throws IOException If there is an issue writing to the underlying stream.
+   * @throws IllegalStateException 
+   *   <ul>
+   *    <li>If trying to end and element that has not been start.</li>
+   *    <li>If trying to end this chunk while document is not started.</li>
+   *   </ul>
+   *   
    */
-  public void writeEndElement() 
-    throws DocumentStreamException;
-
+  public void writeEndElement()  throws IOException;
 
 /** Closes the currently opened group chunk/node and updates any
    * data as required. The group node to close should have
    * been previously opened by {@link #writeStartGroup(java.lang.Object, com.optimasc.streams.Attribute[]) }
    *
-   * @throws DocumentStreamException if there is no group node started,
-   *   or if maximum allowed nesting has been reached, or if the size
-   *   of the data written to this element is not allowed.
+   * @throws IllegalArgumentException  If the size of the data to be written
+   *   is not supported or is invalid.
+   * @throws IOException If there is an issue writing to the underlying stream.
+   * @throws IllegalStateException 
+   *   <ul>
+   *    <li>If trying to end a group that has not been started.</li>
+   *    <li>If trying to end this chunk while document is not started.</li>
+   *   </ul>
+   *   
    */
-  public void writeEndGroup() 
-    throws DocumentStreamException;
+  public void writeEndGroup()  throws IOException;
   
 
   /** Writes end of document information.
-   * @throws DocumentStreamException 
+   * @throws IllegalArgumentException  If the size of the document 
+   *   is not supported or is invalid.
+   * @throws IOException If there is an issue writing to the underlying stream.
+   * @throws IllegalStateException 
+   *   <ul>
+   *    <li>If trying to end a document that has not been started.</li>
+   *    <li>If trying to end a document while the last element has not been closed.</li>
+   *    <li>If trying to end a document while some of the groups have not been closed.</li>
+   *   </ul>
    */
-  public void writeEndDocument() 
-    throws DocumentStreamException;
+  public void writeEndDocument() throws IOException;
  
   /**
    * Close this writer and free any resources associated with the 
@@ -71,25 +106,14 @@ public interface DocumentStreamWriter
    * @throws DocumentStreamException 
    */
   public void close() 
-    throws DocumentStreamException;
+    throws IOException;
 
   /**
    * Write any cached data to the underlying output mechanism.
    * @throws DocumentStreamException 
    */
-  public void flush() 
-    throws DocumentStreamException;
+    public void flush()  throws IOException;
   
-  /**
-   * Write the XML Declaration.  Note that the encoding parameter does
-   * not set the actual encoding of the underlying output.  That must 
-   * be set when the instance of the XMLStreamWriter is created using the
-   * XMLOutputFactory
-   * @param encoding encoding of the xml declaration
-   * @param version version of the xml document
-   * @throws DocumentStreamException 
-   */
-
   /** Creates a new document with the specified <code>publicID</code>. This
    *  is normally the first method to call when creating a structured document.
    *
@@ -99,38 +123,22 @@ public interface DocumentStreamWriter
    * @param publicID The ID associated with this document
    * @throws DocumentStreamException
    */
-  public void  writeStartDocument(String publicID)
-    throws DocumentStreamException;
+  public void  writeStartDocument(String publicID) throws IOException;
 
-  /** Write text to the output. The underlying encoding of the
+  /** Write text to the output. It is assumed that the text is composed of 
+   *  UCS-2 characters (BMP). The underlying encoding of the
    *  data is implementation specific and may throw {@link java.io.UnsupportedEncodingException}
-   *  if the data can be stored in the underlying structured format. Normally
-   *  <code>US-ASCII</code> should be supported by default, but other characters
-   *  depends on the underlying structured format.
-   * 
+   *  if the data cannot be stored in the underlying structured format without
+   *  loss of precision.
+   *   
    * @param text the value to write
    * @throws DocumentStreamException
-   * @throws UnsupportedEncodingException In the case where the underlying
-   *  implementation does not permit to encode these characters.
+   *  @throws UnsupportedEncodingException If the underlying format
+   *    does not support encoding into UCS-2 format or a similar
+   *    format without any loss of data.
    */
-  public void writeCharacters(String text) 
-    throws DocumentStreamException;
-
-  /** Write text to the output. The underlying encoding of the
-   *  data is implementation specific and may throw {@link java.io.UnsupportedEncodingException}
-   *  if the data can be stored in the underlying structured format. Normally
-   *  <code>US-ASCII</code> should be supported by default, but other characters
-   *  depends on the underlying structured format.
-   *
-   * @param text the value to write
-   * @param start the starting position in the array
-   * @param len the number of characters to write
-   * @throws DocumentStreamException
-   * @throws UnsupportedEncodingException In the case where the underlying
-   *  implementation does not permit to encode these characters.
-   */
-  public void writeCharacters(char[] text, int start, int len) 
-    throws DocumentStreamException;
+  public void writeChars(String text) 
+    throws IOException;
 
   /**
    * Get the value of a feature/property from the underlying implementation
@@ -141,53 +149,131 @@ public interface DocumentStreamWriter
    */
   public Object getProperty(java.lang.String name) throws IllegalArgumentException;
 
-  /** Write an 8-bit value to the output.
+  /** Write an 8-bit octet value to the output. The low-order
+   *  byte is the actual value that will be written.
    * 
    * @param b the value to write
    * @throws DocumentStreamException
    */
-  public void writeOctet(int b) throws DocumentStreamException;
+  public void writeByte(int b) throws IOException;
   
-  
-  /** Write a 32-bit IEEE-754 floating point value (Single)
+  /** Write an 8-bit octet value to the output. The low-order
+   *  byte is the actual value that will be written.
    * 
-   * @param v the value to write
+   * @param b the value to write
    * @throws DocumentStreamException
    */
-  public void writeSingle(float v) throws DocumentStreamException;
+  public void write(int b) throws IOException;
   
-  /** Write a 64-bit IEEE-754 floating point value (Single)
+  /** Write a 32-bit IEEE-754 floating point value (Single).
    * 
    * @param v the value to write
-   * @throws DocumentStreamException
+   * @throws IOException
    */
-  public void writeDouble(double v) throws DocumentStreamException;
+  public void writeFloat(float v) throws IOException;
+  
+  /** Write a 64-bit IEEE-754 floating point value (Single). 
+   * 
+   * @param v the value to write
+   * @throws IOException
+   */
+  public void writeDouble(double v) throws IOException;
 
   
-  /** Write 8-bit values to the output.
+  /** Write 8-bit octet values to the output.
    * 
    * @param buffer The value to write
    * @param off The starting position in the array
    * @param len The number of octets to write
-   * @throws DocumentStreamException
+   * @throws IOException
    */
-  public void writeOctetString(byte[] buffer, int off, int len) throws DocumentStreamException;
+  public void write(byte[] buffer, int off, int len) throws IOException;
   
-  /** Writes a 16-bit values to the output in the correct endian of 
-   *  the document.
+  
+  /** Write 8-bit octet values to the output.
+   * 
+   * @param buffer The value to write
+   * @throws IOException
+   */
+  public void write(byte[] buffer) throws IOException;
+  
+  
+  /** Writes a 16-bit integer values to the output in the correct expected 
+   *  format for the document.
    * 
    * @param w The value to write
-   * @throws DocumentStreamException
+   * @throws IOException
    */
-  public void writeWord(short w) throws DocumentStreamException;
+  public void writeShort(int w) throws IOException;
   
-  /** Writes a 32-bit values to the output in the correct endian of 
-   *  the document.
+  /** Writes a 32-bit integer value to the output in the correct expected format
+   *  for the document.
    * 
    * @param l The value to write
-   * @throws DocumentStreamException
+   * @throws IOException
    */
-  public void writeLongword(int l) throws DocumentStreamException;
+  public void writeInt(int l) throws IOException;
 
-  
+  /** Writes a 64-bit integer value to the output in the correct expected
+   *  format for the document.
+   * 
+   * @param v The value to write
+   * @throws IOException
+   */
+   public void writeLong(long v) throws IOException;
+   
+   /** Writes a boolean value to the output in the correct expected
+    *  format for the document.
+    * 
+    * @param v The value to write
+    * @throws IOException
+    */
+   public void writeBoolean(boolean v) throws IOException;
+   
+   /** Writes a UCS-2 character to the output in the correct 
+    *  expected format for the document. The underlying encoding of the
+    *  data is implementation specific and may throw {@link java.io.UnsupportedEncodingException}
+    *  if the data can be stored in the underlying structured format
+    *  
+    *  @param v The value to write
+    *  @throws UnsupportedEncodingException If the underlying format
+    *   does not support UCS-2 encoding.
+    *  @throws IOException  
+    */
+   public void writeChar(int v) throws IOException;
+   
+   /** Writes text to the output. This assumes that the characters
+    *  are only composed of ISO-8859-1 characters (Only the low
+    *  order byte of each character is actually taken into account).
+    *  
+    *  In the case where the underlying format only supports <code>
+    *  US-ASCII</code> characters and some of the low-byte values
+    *  are beyond character 0x7F then {@link java.io.UnsupportedEncodingException}
+    *  will be thrown, in that case {@link #write(byte[], int, int)} should
+    *  be called instead.
+    *   
+    *  @param s [in] The value to write
+    *  @throws UnsupportedEncodingException If any of the characters
+    *    low-byte is beyond the value 127.
+    *  @throws IOException   
+    */
+   public void writeBytes(String s) throws IOException;
+   
+   /** Writes text to the output. This assumes that the characters
+    *  can be represented as an UTF-8 string. 
+    *  
+    *  In the case where the underlying format does not support encoding
+    *  UTF-8 strings, this method will throw an <code>{@link java.io.UnsupportedEncodingException}
+    *  </code> exception. 
+    *   
+    *  @param s [in] The value to write
+    *  @throws UnsupportedEncodingException If the underlying format
+    *    does not support encoding into UTF-8 format or a similar
+    *    format without any loss of data.
+    *  @throws IOException   
+    */
+   public void writeUTF(String s) throws IOException;
+   
+   
+   public void setOutput (OutputStream os,  String encoding) throws IOException;
 }

@@ -1,6 +1,7 @@
 package com.optimasc.streams.png;
 
 import java.io.FileNotFoundException;
+import java.io.InputStream;
 
 import com.optimasc.stream.ElementInfo;
 import com.optimasc.stream.TestUtilities;
@@ -45,9 +46,9 @@ public class PNGReaderTest extends TestCase
 
     try
     {
-
-      DocumentStreamReader reader = new PNGReader(getClass()
-          .getResourceAsStream("/res/rembrant.png"), new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/rembrant.png");
+      DocumentStreamReader reader = new PNGReader();
+      reader.setInput(is, null);
       TestUtilities.parse(reader,elements);
     } catch (DocumentStreamException e)
     {

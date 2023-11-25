@@ -35,8 +35,9 @@ public class JPEGReaderTest extends TestCase
   {
     try
     {
-      JPEGReader reader = new JPEGReader(getClass()
-          .getResourceAsStream("/res/rembrant.jpg"),new DefaultStreamFilter());
+      InputStream is = getClass().getResourceAsStream("/res/rembrant.jpg");
+      JPEGReader reader = new JPEGReader();
+      reader.setInput(is, null);
       TestUtilities.parse(reader, null);
     } catch (DocumentStreamException e)
     {
@@ -52,8 +53,10 @@ public class JPEGReaderTest extends TestCase
       /* This JPEG File contains a JPGn marker in which the format is unknown, so
        * it should fail.
        */
-      JPEGReader reader = new JPEGReader(getClass()
-          .getResourceAsStream("/res/corrupt.jpg"),new DefaultStreamFilter());
+      InputStream is = getClass()
+          .getResourceAsStream("/res/corrupt.jpg");
+      JPEGReader reader = new JPEGReader();
+      reader.setInput(is, null);
       TestUtilities.parse(reader, null);
     } catch (DocumentStreamException e)
     {
@@ -71,8 +74,10 @@ public class JPEGReaderTest extends TestCase
     boolean exceptionThrown = false;
     try
     {
-      JPEGReader reader = new JPEGReader(getClass()
-          .getResourceAsStream("/res/wizard.jpg"),new DefaultStreamFilter());
+      InputStream is = getClass()
+          .getResourceAsStream("/res/wizard.jpg");
+      JPEGReader reader = new JPEGReader();
+      reader.setInput(is, null);
       TestUtilities.parse(reader, null);
     } catch (DocumentStreamException e)
     {

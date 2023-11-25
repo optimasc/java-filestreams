@@ -145,6 +145,27 @@ public class ZIPUtilities extends ChunkUtilities
      }
      return null;
    }
+
+
+  public String chunkIDToObject(Object id) throws IllegalArgumentException
+  {
+    return id.toString();
+  }
+
+  public String groupIDToObject(Object id) throws IllegalArgumentException
+  {
+    return id.toString();
+  }
+
+  public void validateChunkSize(long size) throws IllegalArgumentException
+  {
+  }
+
+
+  public void validateGroupSize(long size) throws IllegalArgumentException
+  {
+  }
+   
    
 
 }
