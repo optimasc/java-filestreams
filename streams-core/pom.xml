@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.optimasc.parsers</groupId>
+        <artifactId>stasf-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+  <groupId>com.optimasc.parsers</groupId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>Streaming API for structured formats (StASF) core interfaces</name>
+  <inceptionYear>2018</inceptionYear>
+  <artifactId>stasf-core</artifactId>
+  <description>Defines the interfaces to implement to parse in a generic way any structured document. This is loosely based on XMLPull parsing functionality but applied to any structured format.</description>
+</project>
+

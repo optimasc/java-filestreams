@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.optimasc.parsers</groupId>
+        <artifactId>stasf-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+
+  <groupId>com.optimasc.parsers</groupId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>Streaming API for structured formats (StASF) PNG parser and writer implementation</name>
+  <inceptionYear>2018</inceptionYear>
+  <artifactId>stasf-png</artifactId>
+  <description>Implementation of stream API structured format parsing and writing for PNG file formats.</description>
+   
+   <dependencies>
+		<dependency>
+			<groupId>com.optimasc.parsers</groupId>
+			<artifactId>stasf-core</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+		<dependency>
+			<groupId>com.optimasc.parsers</groupId>
+			<artifactId>stasf-core-impl</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+		<dependency>
+			<groupId>com.optimasc.commons</groupId>
+			<artifactId>optimasc-commons-io-cldc</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+		<dependency>
+			<groupId>com.optimasc.parsers</groupId>
+			<artifactId>stasf-core-impl-test</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.optimasc.commons</groupId>
+			<artifactId>optimasc-commons-io</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+			<scope>test</scope>
+		</dependency>
+   </dependencies>
+</project>
+
