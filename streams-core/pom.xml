@@ -11,9 +11,9 @@
 
   <groupId>com.optimasc.parsers</groupId>
   <version>0.0.1-SNAPSHOT</version>
+  <artifactId>stasf-core</artifactId>
   <name>Streaming API for structured formats (StASF) core interfaces</name>
   <inceptionYear>2018</inceptionYear>
-  <artifactId>stasf-core</artifactId>
   <description>Defines the interfaces to implement to parse in a generic way any structured document. This is loosely based on XMLPull parsing functionality but applied to any structured format.</description>
 </project>
 

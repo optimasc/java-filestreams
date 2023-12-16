@@ -287,19 +287,16 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter
     }
   }
 
-  @Override
   public void write(int b) throws IOException
   {
     dataWriter.write(b);
   }
 
-  @Override
   public void write(byte[] buffer) throws IOException
   {
     dataWriter.write(buffer);
   }
 
-  @Override
   public void writeLong(long value) throws IOException
   {
     if (bigEndian)
@@ -328,7 +325,6 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter
     }
   }
 
-  @Override
   public void writeBoolean(boolean v) throws IOException
   {
     if (v==true)
@@ -340,7 +336,6 @@ public abstract class AbstractDocumentWriter implements DocumentStreamWriter
     }
   }
 
-  @Override
   public void writeChar(int v) throws IOException
   {
   }
