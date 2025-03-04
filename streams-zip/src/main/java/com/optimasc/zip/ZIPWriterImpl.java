@@ -8,6 +8,7 @@ import java.util.Vector;
 import java.util.zip.CRC32;
 
 import com.optimasc.date.DOSDate;
+import com.optimasc.date.DOSDateTime;
 import com.optimasc.streams.internal.ChunkInfo;
 import com.optimasc.streams.internal.AbstractDocumentWriter;
 import com.optimasc.streams.internal.ResourceChunkInfo;
@@ -102,14 +103,12 @@ public class ZIPWriterImpl extends AbstractDocumentWriter
     {
       Calendar cal = Calendar.getInstance();  
       cal.setTime(new Date(System.currentTimeMillis()));
-      dataWriter.writeShort(DOSDate.CalendarToDOSTime(cal));
-      dataWriter.writeShort(DOSDate.CalendarToDOSDate(cal));
+      dataWriter.writeInt((int)DOSDateTime.converter.encode(cal));
     } else
     {
       Calendar cal = Calendar.getInstance();  
       cal.setTime(chunkData.getLastModifiedDate());
-      dataWriter.writeShort(DOSDate.CalendarToDOSTime(cal));
-      dataWriter.writeShort(DOSDate.CalendarToDOSDate(cal));
+      dataWriter.writeInt((int)DOSDateTime.converter.encode(cal));
     }
     //!!!!!!!!!!!!!!!!!!!!!!!!!!1
     /* crc-32                          4 bytes */
@@ -185,14 +184,12 @@ public class ZIPWriterImpl extends AbstractDocumentWriter
       {
         Calendar cal = Calendar.getInstance();  
         cal.setTime(new Date(System.currentTimeMillis()));
-        dataWriter.writeShort(DOSDate.CalendarToDOSTime(cal));
-        dataWriter.writeShort(DOSDate.CalendarToDOSDate(cal));
+        dataWriter.writeInt((int)DOSDateTime.converter.encode(cal));
       } else
       {
         Calendar cal = Calendar.getInstance();  
         cal.setTime(chunkInfo.getLastModifiedDate());
-        dataWriter.writeShort(DOSDate.CalendarToDOSTime(cal));
-        dataWriter.writeShort(DOSDate.CalendarToDOSDate(cal));
+        dataWriter.writeInt((int)DOSDateTime.converter.encode(cal));
       }
       /* crc-32                          4 bytes  */
       dataWriter.writeInt((int)crc32Value);

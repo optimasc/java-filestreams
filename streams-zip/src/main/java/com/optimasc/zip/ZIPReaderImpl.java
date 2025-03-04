@@ -10,7 +10,9 @@ import java.util.Date;
 import java.util.Hashtable;
 
 import com.optimasc.date.DOSDate;
-import com.optimasc.date.FiletimeDate;
+import com.optimasc.date.DateConverter;
+import com.optimasc.date.DateTimeEpochs;
+import com.optimasc.date.NTFSDateTime;
 import com.optimasc.io.ByteOrder;
 import com.optimasc.io.SeekableDataInputStream;
 import com.optimasc.streams.DocumentInfo;
@@ -313,15 +315,15 @@ public class ZIPReaderImpl extends AbstractDocumentReader
         {
           long mtime = getLongLittle(extraDataBuffer, internalOffset);
           internalOffset += 8;
-          Calendar internalmodificationTime = FiletimeDate.converter.decode(mtime);
+          Calendar internalmodificationTime = NTFSDateTime.converter.decode(mtime).toCalendar();
           chunk.setLastModifiedDate(internalmodificationTime.getTime());
           long atime = getLongLittle(extraDataBuffer, internalOffset);
           internalOffset += 8;
-          Calendar internalAccessTime = FiletimeDate.converter.decode(atime);
+          Calendar internalAccessTime = NTFSDateTime.converter.decode(atime).toCalendar();
           chunk.setLastAccessedDate(internalAccessTime.getTime());
           long ctime = getLongLittle(extraDataBuffer, internalOffset);
           internalOffset += 8;
-          Calendar internalCreationTime = FiletimeDate.converter.decode(ctime);
+          Calendar internalCreationTime = NTFSDateTime.converter.decode(ctime).toCalendar();
           chunk.setCreatedDate(internalCreationTime.getTime());
         }
       }
