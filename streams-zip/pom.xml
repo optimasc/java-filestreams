@@ -40,12 +40,12 @@
 		</dependency>
 		<dependency>
 			<groupId>com.optimasc.commons</groupId>
-			<artifactId>optimasc-commons-date-cldc</artifactId>
+			<artifactId>optimasc-commons-archive-cldc</artifactId>
 			<version>0.0.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>com.optimasc.commons</groupId>
-			<artifactId>optimasc-commons-archive-cldc</artifactId>
+			<artifactId>optimasc-commons-date</artifactId>
 			<version>0.0.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>
